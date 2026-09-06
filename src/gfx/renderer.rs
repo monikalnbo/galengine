@@ -39,8 +39,8 @@ impl<'a> Renderer<'a> {
         )
     }
 
-    /// 游戏内容画进离屏 → letterbox 贴窗（黑底）→ present
-    pub fn present<F>(&mut self, canvas: &mut Canvas<Window>, dx: i32, dy: i32, draw_game: F) -> Result<(), String>
+    /// 游戏内容画进离屏 → letterbox 贴窗（黑底）。不 present——越界层等窗口层绘制由 render.rs 接续后自行 present
+    pub fn compose<F>(&mut self, canvas: &mut Canvas<Window>, dx: i32, dy: i32, draw_game: F) -> Result<(), String>
     where
         F: FnOnce(&mut Canvas<Window>) -> Result<(), String>,
     {
@@ -58,7 +58,6 @@ impl<'a> Renderer<'a> {
         canvas.set_draw_color(Color::BLACK);
         canvas.clear();
         canvas.copy(&self.screen, None, Some(Self::letterbox(canvas, dx, dy)))?;
-        canvas.present();
         game_err.map_or(Ok(()), Err)
     }
 

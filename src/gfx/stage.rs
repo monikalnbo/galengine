@@ -52,7 +52,7 @@ impl Layer {
     }
 }
 
-#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct StageSnap {
     pub bg: Option<String>,
     pub chars: [Option<String>; 3],

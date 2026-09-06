@@ -42,7 +42,7 @@ pub enum SysEvent {
 pub enum RunState {
     WaitClick,
     WaitTimer { left_ms: f32 },
-    WaitChoice { items: Vec<(String, String)> },
+    WaitChoice { prompt: String, items: Vec<(String, String)> },
     WaitInput(Box<InputSpec>),
     Ended,
 }
@@ -231,7 +231,7 @@ impl Interp {
 
     /// 选项选择
     pub fn choose(&mut self, idx: usize) -> Result<(), String> {
-        if let RunState::WaitChoice { items } = &self.state {
+        if let RunState::WaitChoice { items, .. } = &self.state {
             let target = items
                 .get(idx)
                 .map(|(_, t)| t.clone())
@@ -392,10 +392,10 @@ impl Interp {
                 self.pc = *pc;
                 Ok(false)
             }
-            Command::Choice { items, .. } => {
+            Command::Choice { prompt, items } => {
                 self.tw.clear();
                 self.cur_name = None;
-                self.state = RunState::WaitChoice { items };
+                self.state = RunState::WaitChoice { prompt, items };
                 Ok(true)
             }
             Command::Input { var, prompt, width, default } => {

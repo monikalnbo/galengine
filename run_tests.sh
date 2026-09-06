@@ -2,6 +2,7 @@
 # 三剧本回归：a3 演出链 / a4 跨文件 / a5 分支输入变量
 set -e
 cd "$(dirname "$0")"
+cargo build --release --quiet || exit 1
 export ES_DATA_DIR=testdata/game/data
 export ES_DEBUG=1
 export ES_DEBUG_AUTOCLICK_MS=600
