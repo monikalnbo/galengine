@@ -1,0 +1,203 @@
+//! 表达式求值：字面量（数字/引号串/裸词=字符串）、f.*/sf.* 变量、
+//! ?? 空值合并（右结合）、+ - * /（数字；+ 亦拼接字符串）。左结合折叠。
+
+use crate::script::vars::{Value, Vars};
+
+pub fn eval(expr: &str, vars: &Vars) -> Result<Value, String> {
+    let e = expr.trim();
+    if e.is_empty() {
+        return Err("表达式为空".into());
+    }
+    if let Some(v) = atom(e, vars) {
+        return Ok(v); // 单字面量/单变量快速路径（含负数）
+    }
+    // ?? 空值合并（右结合，取最右分割）
+    if let Some((i, _)) = splits(e, &["??"]).pop() {
+        let left = eval(&e[..i], vars)?;
+        return if is_blank(&left) { eval(&e[i + 2..], vars) } else { Ok(left) };
+    }
+    for seps in [&["+", "-"][..], &["*", "/"][..]] {
+        let ops = splits(e, seps);
+        // 过滤一元符号：前段为空（运算符紧跟运算符）说明是 +/- 一元号，并入操作数段
+        let kept: Vec<(usize, &'static str)> = ops
+            .iter()
+            .copied()
+            .scan(0usize, |seg_start, (i, op)| {
+                let keep = !e[*seg_start..i].trim().is_empty();
+                if keep {
+                    *seg_start = i + 1;
+                }
+                Some((keep, (i, op)))
+            })
+            .filter(|(keep, _)| *keep)
+            .map(|(_, op)| op)
+            .collect();
+        if !kept.is_empty() {
+            // 左结合折叠：seg0 (op seg1) (op seg2) …
+            let mut v = eval(&e[..kept[0].0], vars)?;
+            let mut prev = kept[0];
+            for &(i, op) in &kept[1..] {
+                let rhs = eval(&e[prev.0 + 1..i], vars)?;
+                v = bin(&v, prev.1, &rhs)?;
+                prev = (i, op);
+            }
+            let rhs = eval(&e[prev.0 + 1..], vars)?;
+            return bin(&v, prev.1, &rhs);
+        }
+    }
+    Err(format!("无法求值：{e}"))
+}
+
+/// if 条件求值（指令已拆为 var / op / val）
+pub fn eval_cond(var: &str, op: &str, val: &str, vars: &Vars) -> Result<bool, String> {
+    let (a, b) = (eval(var, vars)?, eval(val, vars)?);
+    let bad = || format!("条件类型不可比较：{var} {op} {val}");
+    if matches!(&a, Value::Str(_)) || matches!(&b, Value::Str(_)) {
+        return match op {
+            "==" => Ok(a == b),
+            "!=" => Ok(a != b),
+            _ => Err(bad()),
+        };
+    }
+    let (x, y) = (a.as_f64(), b.as_f64());
+    Ok(match op {
+        "==" => x == y,
+        "!=" => x != y,
+        ">=" => x >= y,
+        "<=" => x <= y,
+        ">" => x > y,
+        "<" => x < y,
+        _ => return Err(bad()),
+    })
+}
+
+fn bin(a: &Value, op: &str, b: &Value) -> Result<Value, String> {
+    let both_num = !matches!(a, Value::Str(_)) && !matches!(b, Value::Str(_));
+    if both_num {
+        let (x, y) = (a.as_f64(), b.as_f64());
+        let v = match op {
+            "+" => x + y,
+            "-" => x - y,
+            "*" => x * y,
+            "/" if y == 0.0 => return Err("除数为零".into()),
+            "/" => x / y,
+            _ => return Err(format!("未知运算符 {op}")),
+        };
+        return Ok(if matches!((a, b), (Value::Float(_), _) | (_, Value::Float(_))) || v.fract() != 0.0 {
+            Value::Float(v)
+        } else {
+            Value::Int(v as i64)
+        });
+    }
+    match op {
+        "+" => Ok(Value::Str(format!("{}{}", a.as_str(), b.as_str()))),
+        _ => Err(format!("类型不可运算：{op}")),
+    }
+}
+
+/// 整体解析为单值；引号串/数字/变量命中；含点未命中变量=空值（?? 语义）
+fn atom(e: &str, vars: &Vars) -> Option<Value> {
+    let b = e.as_bytes();
+    if b.len() >= 2 && ((b[0] == b'\'' && b[b.len() - 1] == b'\'') || (b[0] == b'"' && b[b.len() - 1] == b'"')) {
+        return Some(Value::Str(e[1..e.len() - 1].into()));
+    }
+    if let Ok(i) = e.parse::<i64>() {
+        return Some(Value::Int(i));
+    }
+    if let Ok(f) = e.parse::<f64>() {
+        return Some(Value::Float(f));
+    }
+    if !e.contains(' ') {
+        if let Some(v) = vars.get(e) {
+            return Some(v.clone());
+        }
+        if e.contains('.') {
+            return Some(Value::Str(String::new())); // 未赋值变量=空（?? 视为 blank）
+        }
+        return Some(Value::Str(e.into())); // 裸词=字符串常量
+    }
+    None
+}
+
+/// ?? 语义：空串/0 视为「未设置」取右值
+fn is_blank(v: &Value) -> bool {
+    match v {
+        Value::Str(s) => s.is_empty(),
+        Value::Int(i) => *i == 0,
+        Value::Float(f) => *f == 0.0,
+    }
+}
+
+/// 引号外分隔符位置（按出现顺序）
+fn splits(s: &str, seps: &[&'static str]) -> Vec<(usize, &'static str)> {
+    let mut out = Vec::new();
+    let mut quote: Option<char> = None;
+    for (i, c) in s.char_indices() {
+        match quote {
+            Some(q) if c == q => quote = None,
+            None if c == '\'' || c == '"' => quote = Some(c),
+            None => {
+                for &sep in seps {
+                    if s[i..].starts_with(sep) {
+                        out.push((i, sep));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn v() -> Vars {
+        let mut v = Vars::default();
+        v.set("f.a", Value::Int(2));
+        v.set("sf.name", Value::Str("夏".into()));
+        v.set("f.blank", Value::Str(String::new()));
+        v
+    }
+
+    #[test]
+    fn 四则与左结合() {
+        let vars = v();
+        assert_eq!(eval("1 + 2 * 3", &vars).unwrap(), Value::Int(7));
+        assert_eq!(eval("f.a * f.a + 1", &vars).unwrap(), Value::Int(5));
+        assert_eq!(eval("10 - 4 - 1", &vars).unwrap(), Value::Int(5));
+        assert_eq!(eval("10 / 4", &vars).unwrap(), Value::Float(2.5));
+        assert_eq!(eval("10 / 5", &vars).unwrap(), Value::Int(2));
+        assert!(eval("1 / 0", &vars).is_err());
+    }
+
+    #[test]
+    fn 负数字面量与字符串拼接() {
+        let vars = v();
+        assert_eq!(eval("-5", &vars).unwrap(), Value::Int(-5));
+        assert_eq!(eval("\"夏\" + '天'", &vars).unwrap(), Value::Str("夏天".into()));
+        assert_eq!(eval("sf.name + 1", &vars).unwrap(), Value::Str("夏1".into()));
+        assert_eq!(eval("f.a - -1", &vars).unwrap(), Value::Int(3));
+    }
+
+    #[test]
+    fn 空值合并() {
+        let vars = v();
+        assert_eq!(eval("f.blank ?? '兜底'", &vars).unwrap(), Value::Str("兜底".into()));
+        assert_eq!(eval("f.nothing ?? f.a", &vars).unwrap(), Value::Int(2));
+        assert_eq!(eval("sf.name ?? 'x'", &vars).unwrap(), Value::Str("夏".into()));
+        assert_eq!(eval("f.missing ?? f.blank ?? '深兜底'", &vars).unwrap(), Value::Str("深兜底".into()));
+    }
+
+    #[test]
+    fn 条件求值() {
+        let vars = v();
+        assert!(eval_cond("f.a", "==", "2", &vars).unwrap());
+        assert!(eval_cond("f.a", ">=", "2", &vars).unwrap());
+        assert!(!eval_cond("f.a", "<", "2", &vars).unwrap());
+        assert!(eval_cond("sf.name", "==", "夏", &vars).unwrap());
+        assert!(eval_cond("sf.name", "!=", "冬", &vars).unwrap());
+        assert!(eval_cond("sf.name", ">", "1", &vars).is_err());
+    }
+}
