@@ -171,10 +171,10 @@ cargo build --release           # Windows: 用 windows target 交叉构建或 CI
 galengine.exe + game/data/      # exe <2MB，数据同级，双击即玩
 ```
 
-## 7. 现状提醒（游戏仓）
+## 7. 从其他引擎迁移
 
-`/root/galgame/game/data/scenario` 里的正式剧本（10_common/20_mio/30_chitose…）是**旧引擎 KAG 语法**（`@image [l][r]`），新引擎不执行。两条路：
-1. **按本 DSL 重写**（推荐）——语法量小，26 条指令一页速查；大纲/文案直接搬，只换写法
-2. 以后写 KAG→DSL 转换器（未排期，别等）
+从 KAG/吉里吉里系（`@image [l][r]` 标签语法）迁移的剧本**不能直接运行**，两条路：
+1. **按本 DSL 重写**（推荐）——语法量小，一页速查；大纲与文案直接搬，只换写法
+2. 编写旧语法 → 本 DSL 的转换脚本（按需自建）
 
-回归用剧本在引擎仓 `testdata/game/data/scenario/`（a3 演出链 / a4 跨文件 / a5 分支输入 / a6 全功能），可直接当写法范本。
+可运行的范本在引擎仓 `testdata/game/data/scenario/`（a3 演出链 / a4 跨文件 / a5 分支输入 / a6 全功能），可直接当写法模板。

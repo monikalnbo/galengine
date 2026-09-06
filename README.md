@@ -1,57 +1,79 @@
-# galengine（eighth-summer-engine）
+# galengine
 
-通用 galgame 引擎（Rust + SDL2，单二进制 <10MB）。换游戏=换 `data/` 目录+`config.json`，引擎代码零改动；引擎仓与游戏仓分离（首个客户：《第八个夏天》）。
+数据驱动的通用 galgame / 视觉小说引擎。**Rust + SDL2，单二进制约 1.4MB，MIT 协议。**
 
-> 唯一需求来源：[`docs/rebuild-spec.md`](docs/rebuild-spec.md)。
-> 创作者手册：[`docs/game-authoring.md`](docs/game-authoring.md)（目录契约/26 条 DSL/配置/开发循环/发布）
-> 错题本：[`docs/mistakes.md`](docs/mistakes.md)（引擎/API/验收/测试/流程 五类，含防复发规则）
-> 2026-09 按需求书从零重构完成（旧实现 git log 可回溯）。
+换一部游戏 = 换一个 `data/` 目录 + `config.json`，引擎代码零改动。游戏内容（剧本、立绘、音乐、角色配色、UI 文案）全部在数据侧，引擎内不含任何具体作品的信息。
 
-## 分层（只准向下依赖）
+## 特性
 
+- **1280×720 离屏渲染**，窗口自由缩放 16:9 letterbox 居中；图片资源后台线程预解码，切场景不卡帧
+- **26 条剧本 DSL**：背景/立绘/CG/音频、变量与表达式（`?? + - * /`）、跨文件跳转、选项分支、名字输入
+- **打字机文本**：中文断行禁则、30ms/字可调、点击三段语义（补全→翻页→推进）
+- **双通道交互**：键盘（↑↓+回车）与鼠标（悬停+点击）全程等价；SDL 文本输入透传 IME，预设名按钮兜底
+- **存档系统**：9 槽 + 快存快读（F9/F10），缩略图 + 演出层快照 + 剧本指纹校验（不匹配中文拒读）
+- **meta 演出（打破第四面墙）**：不明存档、破損标记、三重确认删档、标题画面演化、图像越出屏幕画进黑边、窗口抖动、向玩家桌面写文件、晚安关机
+- **CG 鉴赏**：`cg` 指令自动解锁，锁定剪影 + 全屏翻页
+- **环境设置**：BGM / SE / 文字速度三滑条 + 快捷键，全局持久化
+- **可验收**：全中文报错（含 文件:行号）、无头自动回归、单测齐全
+
+## 剧本长什么样
+
+```text
+bg bg_station_rain 800
+bgm rain_theme
+name 时雨 ……你，也会来这里啊。
+char 0 shigure_neutral
+
+flag aff_shigure +1
+choice 雨快停了，要说什么？
+  「一起走吧」|*walk
+  「再见」|*bye
+endchoice
+
+*walk
+flag aff_shigure +2
+if aff_shigure >= 3 *shigure_route
 ```
-L1  app/input/render/systems   主循环 · 事件路由 · 帧组装 · 系统动作与状态枢纽
-L2  script/ ui/                剧本(lexer/command/interp/expr/vars) · 界面(dialog/choice/inputbox/menu/title/savemenu/gallery/volume/ritual/restui/overlay)
-L3  gfx/ text/ audio.rs save/  renderer(letterbox+越界) · stage(crossfade) · assets/prefetch · font/layout/writer · SDL2_mixer · slots/meta
-L4  platform.rs config.rs      关机/桌面文件 · 唯一配置源 data/config.json
-```
 
-## 功能一览
-
-- 1280×720 离屏 + 16:9 letterbox；reach 越界层画进黑边；window_fx shake/标题
-- 26 条剧本 DSL（bg/char/cg/bgm/se/flag/set/jump/if/choice/input/meta 四件套/reach/shutdown/desktop_write…），错误全中文（文件:行号）
-- {hero}/{you} 运行时替换；f.* 随存档，sf.* 退出即写盘 global.json
-- 双通道选项；SDL_TEXTINPUT（IME）+预设名兜底；A 自动模式；按住 Ctrl 快进（wait 不可跳）
-- 9 槽存档（缩略图+演出层快照+剧本指纹，不匹配中文拒读）+F9/F10 快存读
-- meta 演出：不明存档/破損标/三重确认删档（备份 backup/）/标题演化
-- CG 鉴赏（cg 指令自动解锁记 sf.cgs，目录=bgimage/cg_*，锁定剪影+全屏翻页）
-- 音量三滑条（BGM/SE/文字速度，存 sf.*）+F5-F8 快捷键；晚安关机（Windows 真执行，验收环境日志）；desktop_write/open（防路径穿越）
-
-## 运行
+## 快速开始
 
 ```bash
+git clone https://github.com/monikalnbo/galengine
+cd galengine
 cargo build --release
-ES_DATA_DIR=testdata/game/data ./target/release/galengine   # 自带测试数据
-ES_DATA_DIR=/root/galgame/game/data ./target/release/galengine  # 游戏仓数据
+ES_DATA_DIR=testdata/game/data ./target/release/galengine   # 跑自带演示数据
 ```
 
-- 操作：点击/空格推进｜↑↓+回车或鼠标选项｜A 自动｜按住 Ctrl 快进｜Esc 菜单｜F9/F10 快存读
-- 验收辅助：`ES_SCRIPT` `ES_START_LABEL` `ES_DATA_DIR` `ES_DEBUG=1` `ES_DEBUG_AUTOCLICK_MS=N`
+操作：点击/空格推进｜↑↓+回车或鼠标选项｜A 自动模式｜按住 Ctrl 快进｜Esc 菜单｜F9/F10 快存读｜F5-F8 音量。
+
+## 📚 文档（怎么用、怎么写、怎么改）
+
+| 文档 | 给谁 | 内容 |
+|---|---|---|
+| **[创作手册](docs/game-authoring.md)** | 编剧 / 美术 / 音频 / 策划 | **操作规范 + 教程**：目录契约（素材放哪、怎么命名）、26 条指令逐条说明、完整小样剧本、config.json 全字段、开发循环（怎么看效果/排练单段/无头冒烟/重置进度）、发布打包、旧引擎语法迁移 |
+| **[错题本](docs/mistakes.md)** | 引擎维护者 / 做验收的人 | 五类 32 条真实踩坑（引擎代码 / Rust-sdl2 API / 像素验收 / 测试自身 / 工程流程）+ 8 条防复发规则 |
+| **[设计文档](docs/rebuild-spec.md)** | 想理解引擎为什么这样设计的人 | 分层架构（L1-L4）、功能需求全清单、配置规范、验收标准 |
+
+**做一部游戏只需要读第一篇。** 照目录摆素材、抄 config、按指令表写剧本，即可完整跑起来。
+
+## 架构（每文件百行量级，只准向下依赖）
+
+```
+L1  app/input/render/systems   主循环 · SDL 事件路由 · 帧组装 · 系统动作
+L2  script/ ui/                剧本(词法/指令/解释器/表达式/变量) · 界面(12 个组件)
+L3  gfx/ text/ audio save/     letterbox渲染 · 演出层crossfade · 预解码 · 字体断行打字机 · 混音 · 存档
+L4  platform.rs config.rs      关机/桌面文件 · 唯一配置源 data/config.json
+```
 
 ## 测试与验收
 
 ```bash
-cargo test       # 纯逻辑单测 + SDL dummy 驱动存读档 E2E
-./run_tests.sh   # xvfb 三剧本回归（a3 演出链 / a4 跨文件 / a5 分支输入），全 ended
-# a6 全功能冒烟（meta/越界/窗口/关机/桌面文件）
-ES_DATA_DIR=testdata/game/data ES_SCRIPT=a6_smoke.ks ES_DEBUG=1 ES_DEBUG_AUTOCLICK_MS=400 \
-  xvfb-run -a ./target/release/galengine
+cargo test       # 18 项：纯逻辑单测 + SDL dummy 驱动存读档端到端
+./run_tests.sh   # xvfb 三剧本回归（演出链 / 跨文件 / 分支输入），全部跑至 ended
 ```
 
-视觉验收：ffmpeg x11grab 关键帧连拍 + PIL 像素交叉验证（标题/名牌/选项高亮/reach 越界黑边均过；VLM 判读待有图像能力会话补跑）。
+视觉验收流程：ffmpeg x11grab 连拍关键帧 + PIL 像素断言交叉验证（标题背景、名字牌配色、选项高亮、越界层黑边覆盖等）。
 
-## 已知简化（ponytail）
+## License
 
-- 存档指纹用 DefaultHasher：同版本引擎内稳定，跨版本升级存档会拒读（重打一局）
-- 存档时间戳为 UTC
-- kslint 静态检查（label/变量/资源存在性）未建；Windows 真机（IME/DPI/关机）待回归
+[MIT](LICENSE)

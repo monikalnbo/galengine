@@ -8,7 +8,7 @@ n 而所有的存档，都开始碎裂。
 meta_delete_last
 n 那么——亲手，把它删掉吧。
 n 光翻过了这一页。世界安静了下来。
-desktop_write letter.txt|还记得那个夏天吗。{hero}
+desktop_write letter.txt|这是一封来自游戏内的信。{hero}
 desktop_open letter.txt
 window_fx title 该休息了
 reach cg_p01 1500 1.8

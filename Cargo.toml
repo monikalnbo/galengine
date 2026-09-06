@@ -2,7 +2,10 @@
 name = "galengine"
 version = "0.1.0"
 edition = "2021"
-description = "通用 galgame 引擎（Rust+SDL2）——首个客户：《第八个夏天》"
+description = "数据驱动的通用 galgame / 视觉小说引擎（Rust + SDL2）"
+license = "MIT"
+repository = "https://github.com/monikalnbo/galengine"
+keywords = ["game-engine", "visual-novel", "galgame", "sdl2"]
 
 [dependencies]
 sdl2 = { version = "0.37", features = ["image", "ttf", "mixer"] }

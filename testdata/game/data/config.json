@@ -1,5 +1,5 @@
 {
-  "title": "第八个夏天 EIGHTH SUMMER",
+  "title": "GALENGINE DEMO",
   "script_start": "a3_smoke.ks",
   "save_dir": "savedata",
   "save_slots": 9,
@@ -25,7 +25,7 @@
       "莲": [140, 240, 190],
       "拓海": [198, 208, 224]
     },
-    "shutdown_message": "第八个夏天：晚安。"
+    "shutdown_message": "晚安。"
   },
   "dialog": {
     "box_rect": [56, 514, 1168, 172],
