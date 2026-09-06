@@ -46,10 +46,13 @@ pub fn run() -> Result<(), String> {
 
     let script = env::var("ES_SCRIPT").unwrap_or_else(|_| conf.script_start.clone());
     let label = env::var("ES_START_LABEL").ok();
-    let mut interp = Interp::new(vars, conf.typewriter_ms, &conf.game.hero_default, &conf.game.you_default);
-    interp.start(&script, label.as_deref())?;
+    let interp = Interp::new(vars, conf.typewriter_ms, &conf.game.hero_default, &conf.game.you_default);
+    // 标题入口启动（不立即执行剧本；开始游戏/快读时才 start）
 
     let mut g = Game::new(conf, interp);
+    g.start_script = script;
+    g.start_label = label;
+    g.overlay = crate::ui::overlay::Overlay::Title { sel: 0 };
     let autoclick_ms: f32 = env::var("ES_DEBUG_AUTOCLICK_MS")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -95,7 +98,7 @@ pub fn run() -> Result<(), String> {
             click_acc += dt;
             if click_acc >= autoclick_ms {
                 click_acc = 0.0;
-                crate::input::auto_step(&mut g)?;
+                crate::input::auto_step(&mut g, &mut thumbs)?;
             }
         }
 
@@ -132,7 +135,7 @@ pub fn run() -> Result<(), String> {
 
         g.drain_events(&mut canvas)?;
 
-        if g.interp.state == RunState::Ended {
+        if g.started && g.interp.state == RunState::Ended {
             if crate::script::interp::dbg() {
                 eprintln!("[dbg t={:.2}] ended", g.now_ms);
             }

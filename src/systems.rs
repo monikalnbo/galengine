@@ -59,6 +59,10 @@ pub struct Game {
     pub input_ui: Option<InputUi>,
     /// 存档界面展示用槽位快照（开界面时刷新）
     pub save_entries: Vec<(usize, Option<SaveEntry>)>,
+    /// 标题入口：并未进入剧本（Ended 但不退出）
+    pub started: bool,
+    pub start_script: String,
+    pub start_label: Option<String>,
     pub auto: bool,
     pub auto_acc: f32,
     pub ctrl_hold: bool,
@@ -92,6 +96,9 @@ impl Game {
             choice_sel: 0,
             input_ui: None,
             save_entries: Vec::new(),
+            started: false,
+            start_script: String::new(),
+            start_label: None,
             auto: false,
             auto_acc: 0.0,
             ctrl_hold: false,
@@ -111,6 +118,35 @@ impl Game {
         self.save_entries = (1..=self.sys.slots)
             .map(|s| (s, slots::load(&self.sys.save_dir, s)))
             .collect();
+    }
+
+    /// 标题「开始游戏」：从头执行剧本
+    pub fn start_game(&mut self) -> Result<(), String> {
+        let script = self.start_script.clone();
+        let label = self.start_label.clone();
+        self.interp.start(&script, label.as_deref())?;
+        self.started = true;
+        self.overlay = Overlay::None;
+        self.auto = false;
+        self.choice_sel = 0;
+        Ok(())
+    }
+
+    /// 回标题：清周目变量（sf.* 保留），不落盘删除任何东西
+    pub fn back_to_title(&mut self) {
+        let sf = std::mem::take(&mut self.interp.vars.sf);
+        let vars = crate::script::vars::Vars { f: Default::default(), sf };
+        self.interp = Interp::new(
+            vars,
+            self.conf.typewriter_ms,
+            &self.conf.game.hero_default,
+            &self.conf.game.you_default,
+        );
+        self.started = false;
+        self.overlay = Overlay::Title { sel: 0 };
+        self.auto = false;
+        self.choice_sel = 0;
+        self.input_ui = None;
     }
 
     /// 帧计时：抖动/越界淡入淡出/关机倒计时/提示/仪式渐白

@@ -12,8 +12,8 @@ use crate::gfx::renderer::Renderer;
 use crate::script::interp::RunState;
 use crate::systems::Game;
 use crate::text::font::FontBook;
-use crate::ui::overlay::menu_items;
-use crate::ui::{choice, dialog, inputbox, menu, overlay::Overlay, ritual, savemenu};
+use crate::ui::overlay::{esc_items, Overlay};
+use crate::ui::{choice, dialog, gallery, inputbox, menu, ritual, savemenu, title, volume};
 
 pub fn frame(
     g: &mut Game,
@@ -51,25 +51,27 @@ pub fn frame(
     let auto = g.auto;
 
     renderer.compose(canvas, dx, dy, |tc| {
-        g.interp.stage.draw(tc, bank)?;
-        match &g.interp.state {
-            RunState::WaitChoice { prompt, items } => choice::draw(tc, fonts, prompt, items, sel)?,
-            RunState::WaitInput(_) => {
-                if let Some(ui) = &g.input_ui {
-                    inputbox::draw(tc, fonts, ui)?;
+        if g.started {
+            g.interp.stage.draw(tc, bank)?;
+            match &g.interp.state {
+                RunState::WaitChoice { prompt, items } => choice::draw(tc, fonts, prompt, items, sel)?,
+                RunState::WaitInput(_) => {
+                    if let Some(ui) = &g.input_ui {
+                        inputbox::draw(tc, fonts, ui)?;
+                    }
                 }
-            }
-            _ => {
-                dialog::draw(tc, fonts, style, name.as_deref(), &g.interp.tw, now)?;
-                if auto {
-                    let tex = fonts.render_text(22, Color::RGB(110, 220, 255), "AUTO")?;
-                    let q = tex.query();
-                    tc.copy(tex, None, Some(Rect::new(1170, 486, q.width.max(60), q.height.max(26))))?;
+                _ => {
+                    dialog::draw(tc, fonts, style, name.as_deref(), &g.interp.tw, now)?;
+                    if auto {
+                        let tex = fonts.render_text(22, Color::RGB(110, 220, 255), "AUTO")?;
+                        let q = tex.query();
+                        tc.copy(tex, None, Some(Rect::new(1170, 486, q.width.max(60), q.height.max(26))))?;
+                    }
                 }
             }
         }
-        // 覆盖层
-        draw_overlay(tc, g, fonts, thumbs)?;
+        // 覆盖层（标题/菜单/存档/鉴赏/音量/仪式）
+        draw_overlay(tc, g, fonts, thumbs, bank)?;
         Ok(())
     })?;
 
@@ -105,16 +107,21 @@ pub fn frame(
 }
 
 /// 覆盖层绘制
+#[allow(clippy::too_many_arguments)]
 fn draw_overlay(
     tc: &mut Canvas<Window>,
     g: &Game,
     fonts: &mut FontBook,
     thumbs: &savemenu::ThumbCache,
+    bank: &mut TextureBank,
 ) -> Result<(), String> {
     match &g.overlay {
         Overlay::None => {}
         Overlay::Menu { sel } => {
-            menu::draw(tc, fonts, &menu_items(), *sel, 250, true)?;
+            menu::draw(tc, fonts, &esc_items(), *sel, 250, true)?;
+        }
+        Overlay::Title { sel, .. } => {
+            title::draw(tc, fonts, &g.conf, &g.sys.meta.title_evolve, *sel, g.now_ms)?;
         }
         Overlay::Save { mode_save, sel } => {
             savemenu::draw(
@@ -129,10 +136,28 @@ fn draw_overlay(
                 *sel,
             )?;
         }
+        Overlay::Gallery { sel, page, full } => {
+            let items = gallery::catalog();
+            let opened = g.interp.vars.get_or("sf.cgs").as_str();
+            let unlocked: Vec<String> =
+                opened.split(',').filter(|s| !s.is_empty()).map(String::from).collect();
+            match full {
+                Some(idx) => {
+                    if let Some(name) = items.get(*idx) {
+                        gallery::draw_full(tc, fonts, bank, name, *idx, unlocked.len())?;
+                    }
+                }
+                None => {
+                    gallery::draw_grid(tc, fonts, bank, &g.conf, &items, &unlocked, *page, *sel)?;
+                }
+            }
+        }
+        Overlay::Volume { sel } => {
+            volume::draw(tc, fonts, crate::input::volume_values(g), *sel)?;
+        }
         Overlay::Ritual { step, fade, .. } => {
             ritual::draw(tc, fonts, &g.conf, *step, *fade)?;
         }
-        _ => {}
     }
     if let Some(rest) = &g.sys.rest {
         crate::ui::restui::draw(tc, fonts, &g.conf, rest.left_ms)?;

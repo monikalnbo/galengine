@@ -14,7 +14,7 @@ use crate::script::vars::Value;
 use crate::systems::Game;
 use crate::text::font::FontBook;
 use crate::ui::inputbox::{self, Hit};
-use crate::ui::overlay::{menu_items, Overlay};
+use crate::ui::overlay::{esc_items, title_items, Overlay};
 use crate::ui::ritual;
 use crate::ui::savemenu::{self, ThumbCache};
 use crate::ui::{choice, menu};
@@ -132,7 +132,16 @@ fn confirm_key(
             ritual_confirm(g)?;
             Ok(true)
         }
-        _ => match &g.interp.state {
+        Overlay::Title { sel } => title_activate(g, sel, thumbs),
+        Overlay::Gallery { .. } => {
+            gallery_confirm(g);
+            Ok(true)
+        }
+        Overlay::Volume { .. } => {
+            g.overlay = Overlay::None;
+            Ok(true)
+        }
+        Overlay::None => match &g.interp.state {
             RunState::WaitChoice { .. } => g.interp.choose(g.choice_sel).map(|_| true),
             RunState::WaitInput(_) => confirm_input(g).map(|_| true),
             RunState::WaitClick => g.interp.click().map(|_| true),
@@ -158,7 +167,7 @@ fn click(
     if g.overlay.active() {
         match g.overlay.clone() {
             Overlay::Menu { .. } => {
-                if let Some(i) = menu::hit_test(menu_items().len(), 250, lx, ly) {
+                if let Some(i) = menu::hit_test(esc_items().len(), 250, lx, ly) {
                     g.overlay = Overlay::Menu { sel: i };
                     if !menu_activate(g, i, canvas, renderer, thumbs)? {
                         return Ok(false);
@@ -179,7 +188,29 @@ fn click(
                     g.overlay = Overlay::None; // 「回头」路径
                 }
             }
-            _ => {}
+            Overlay::Title { .. } => {
+                if let Some(i) = menu::hit_test(title_items().len(), 380, lx, ly) {
+                    g.overlay = Overlay::Title { sel: i };
+                    if !title_activate(g, i, thumbs)? {
+                        return Ok(false);
+                    }
+                }
+            }
+            Overlay::Gallery { page, full, .. } => match full {
+                Some(_) => g.overlay = Overlay::Gallery { sel: 0, page, full: None },
+                None => {
+                    if let Some(i) = crate::ui::gallery::hit_test(crate::ui::gallery::per_page(), lx, ly) {
+                        g.overlay = Overlay::Gallery { sel: i, page, full: None };
+                        gallery_confirm(g);
+                    }
+                }
+            },
+            Overlay::Volume { .. } => {
+                if let Some(i) = crate::ui::volume::hit_row(lx, ly) {
+                    g.overlay = Overlay::Volume { sel: i };
+                }
+            }
+            Overlay::None => {}
         }
         return Ok(true);
     }
@@ -206,10 +237,68 @@ fn click(
     Ok(true)
 }
 
-/// 覆盖层方向键移动
+/// 覆盖层方向键移动（菜单/标题竖排；存档/鉴赏网格；音量竖排）
 fn overlay_move(g: &mut Game, k: Keycode) {
+    if let Overlay::Volume { sel } = &mut g.overlay {
+        *sel = match k {
+            Keycode::Up => (*sel).saturating_sub(1),
+            Keycode::Down => (*sel + 1).min(2),
+            Keycode::Left | Keycode::Right => {
+                volume_adjust(g, if k == Keycode::Right { 1 } else { -1 });
+                return;
+            }
+            _ => *sel,
+        };
+        return;
+    }
+    if let Overlay::Gallery { sel, page, full } = &mut g.overlay {
+        if full.is_some() {
+            // 全屏：←→ 在已解锁 CG 间翻页
+            let unlocked: Vec<usize> = {
+                let list = crate::ui::gallery::catalog();
+                let opened = g.interp.vars.get_or("sf.cgs").as_str();
+                list.iter()
+                    .enumerate()
+                    .filter(|(_, n)| opened.split(',').any(|x| x == n.as_str()))
+                    .map(|(i, _)| i)
+                    .collect()
+            };
+            if unlocked.is_empty() {
+                return;
+            }
+            let cur = full.map_or(0, |v| v);
+            let pos = unlocked.iter().position(|&i| i == cur).unwrap_or(0);
+            let next = match k {
+                Keycode::Left | Keycode::Up => (pos + unlocked.len() - 1) % unlocked.len(),
+                Keycode::Right | Keycode::Down => (pos + 1) % unlocked.len(),
+                _ => pos,
+            };
+            let idx = unlocked[next];
+            *full = Some(idx);
+            *page = idx / crate::ui::gallery::per_page();
+            *sel = idx % crate::ui::gallery::per_page();
+            return;
+        }
+        let n = crate::ui::gallery::catalog().len();
+        if n == 0 {
+            return;
+        }
+        let per = crate::ui::gallery::per_page();
+        let mut idx = *page * per + *sel;
+        idx = match k {
+            Keycode::Up => idx.saturating_sub(4),
+            Keycode::Down => (idx + 4).min(n - 1),
+            Keycode::Left => idx.saturating_sub(1),
+            Keycode::Right => (idx + 1).min(n - 1),
+            _ => idx,
+        };
+        *page = idx / per;
+        *sel = idx % per;
+        return;
+    }
     let n = match &g.overlay {
-        Overlay::Menu { .. } => menu_items().len(),
+        Overlay::Menu { .. } => esc_items().len(),
+        Overlay::Title { .. } => title_items().len(),
         Overlay::Save { .. } => g.save_entries.len() + g.sys.meta.fake_saves.len(),
         _ => return,
     };
@@ -217,7 +306,7 @@ fn overlay_move(g: &mut Game, k: Keycode) {
         return;
     }
     let cur = match &g.overlay {
-        Overlay::Menu { sel } | Overlay::Save { sel, .. } => *sel,
+        Overlay::Menu { sel } | Overlay::Save { sel, .. } | Overlay::Title { sel } => *sel,
         _ => 0,
     };
     let cols = match g.overlay {
@@ -232,7 +321,7 @@ fn overlay_move(g: &mut Game, k: Keycode) {
         _ => cur,
     };
     match &mut g.overlay {
-        Overlay::Menu { sel } | Overlay::Save { sel, .. } => *sel = next,
+        Overlay::Menu { sel } | Overlay::Save { sel, .. } | Overlay::Title { sel } => *sel = next,
         _ => {}
     }
 }
@@ -246,13 +335,88 @@ fn menu_activate(
     thumbs: &mut ThumbCache,
 ) -> Result<bool, String> {
     match idx {
-        0 => g.overlay = Overlay::None, // 继续
-        1 => open_save_menu(g, thumbs, true),  // 存档
-        2 => open_save_menu(g, thumbs, false), // 读档
-        3 => return Ok(false), // 退出游戏
+        0 => g.overlay = Overlay::None,          // 继续
+        1 => open_save_menu(g, thumbs, true),    // 存档
+        2 => open_save_menu(g, thumbs, false),   // 读档
+        3 => g.overlay = Overlay::Gallery { sel: 0, page: 0, full: None }, // 鉴赏
+        4 => g.overlay = Overlay::Volume { sel: 0 },                        // 音量/速度
+        5 => g.back_to_title(),                  // 回标题
+        6 => return Ok(false),                   // 退出游戏
         _ => {}
     }
     Ok(true)
+}
+
+/// 标题菜单项激活
+fn title_activate(g: &mut Game, idx: usize, thumbs: &mut ThumbCache) -> Result<bool, String> {
+    match idx {
+        0 => g.start_game()?,                    // 开始游戏
+        1 => {
+            // 继续游戏：最新档；无档提示
+            let (dir, n) = (g.sys.save_dir.clone(), g.sys.slots);
+            match crate::save::slots::latest_slot(&dir, n) {
+                Some(slot) => do_load(g, slot),
+                None => g.msg("还没有任何存档。"),
+            }
+        }
+        2 => open_save_menu(g, thumbs, false),   // 读档
+        3 => g.overlay = Overlay::Gallery { sel: 0, page: 0, full: None },
+        4 => g.overlay = Overlay::Volume { sel: 0 },
+        5 => return Ok(false),                   // 退出游戏
+        _ => {}
+    }
+    Ok(true)
+}
+
+/// 鉴赏确认：网格→全屏 / 全屏→网格；锁定不可开
+fn gallery_confirm(g: &mut Game) {
+    if let Overlay::Gallery { sel, page, full } = &mut g.overlay {
+        match full {
+            None => {
+                let idx = *page * crate::ui::gallery::per_page() + *sel;
+                let items = crate::ui::gallery::catalog();
+                if let Some(name) = items.get(idx) {
+                    let unlocked = g.interp.vars.get_or("sf.cgs").as_str();
+                    if unlocked.split(',').any(|x| x == name) {
+                        *full = Some(idx);
+                    } else {
+                        g.msg("这张 CG 还没有解锁。");
+                    }
+                }
+            }
+            Some(_) => *full = None,
+        }
+    }
+}
+
+/// 音量/速度滑条调整（dir=±1）
+fn volume_adjust(g: &mut Game, dir: i64) {
+    let Overlay::Volume { sel } = g.overlay else { return };
+    match sel {
+        0 => {
+            g.sys.audio.bgm_vol = (g.sys.audio.bgm_vol as i64 + dir * 5).clamp(0, 100) as i32;
+            g.interp.vars.sf.insert("volBgm".into(), Value::Int(g.sys.audio.bgm_vol as i64));
+        }
+        1 => {
+            g.sys.audio.se_vol = (g.sys.audio.se_vol as i64 + dir * 5).clamp(0, 100) as i32;
+            g.interp.vars.sf.insert("volSe".into(), Value::Int(g.sys.audio.se_vol as i64));
+        }
+        _ => {
+            let v = (g.interp.tw.interval_ms as i64 + dir * 5).clamp(5, 200);
+            g.interp.tw.interval_ms = v as f32;
+            g.interp.vars.sf.insert("textSpeed".into(), Value::Int(v));
+        }
+    }
+    g.sys.audio.apply_volumes();
+}
+
+/// 音量界面当前值（绘制/启动恢复用）
+pub fn volume_values(g: &Game) -> [i64; 3] {
+    [
+        g.sys.audio.bgm_vol as i64,
+        g.sys.audio.se_vol as i64,
+        g.interp.tw.interval_ms as i64,
+    ]
 }
 
 fn open_save_menu(g: &mut Game, thumbs: &mut ThumbCache, mode_save: bool) {
@@ -325,6 +489,7 @@ fn do_load(g: &mut Game, slot: usize) {
                 Ok(()) => {
                     g.overlay = Overlay::None;
                     g.auto = false;
+                    g.started = true; // 从标题快读也直接开局
                     g.msg(format!("已读取：槽 {slot}"));
                 }
                 Err(e) => g.msg(e),
@@ -348,8 +513,8 @@ fn confirm_input(g: &mut Game) -> Result<(), String> {
     Ok(())
 }
 
-/// 验收自动驱动（ES_DEBUG_AUTOCLICK_MS）：台词=点击，选项=选0，输入=默认值
-pub fn auto_step(g: &mut Game) -> Result<(), String> {
+/// 验收自动驱动（ES_DEBUG_AUTOCLICK_MS）：标题=开始，台词=点击，选项=选0，输入=默认值
+pub fn auto_step(g: &mut Game, thumbs: &mut ThumbCache) -> Result<(), String> {
     if g.sys.rest.is_some() {
         g.cancel_rest(); // 验收环境自动取消关机，跑完剧本
         return Ok(());
@@ -357,6 +522,11 @@ pub fn auto_step(g: &mut Game) -> Result<(), String> {
     if g.overlay.active() {
         // 验收驱动：覆盖层默认首项/确认推进（标题开始/菜单继续/仪式确认）
         match g.overlay.clone() {
+            Overlay::Title { sel, .. } => {
+                if !title_activate(g, sel, thumbs)? {
+                    return Ok(());
+                }
+            }
             Overlay::Menu { .. } => g.overlay = Overlay::None, // 直接继续游戏
             Overlay::Save { .. } | Overlay::Gallery { .. } | Overlay::Volume { .. } => {
                 g.overlay = Overlay::None;
