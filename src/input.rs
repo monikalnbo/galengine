@@ -239,16 +239,28 @@ fn click(
 
 /// 覆盖层方向键移动（菜单/标题竖排；存档/鉴赏网格；音量竖排）
 fn overlay_move(g: &mut Game, k: Keycode) {
-    if let Overlay::Volume { sel } = &mut g.overlay {
-        *sel = match k {
-            Keycode::Up => (*sel).saturating_sub(1),
-            Keycode::Down => (*sel + 1).min(2),
-            Keycode::Left | Keycode::Right => {
-                volume_adjust(g, if k == Keycode::Right { 1 } else { -1 });
+    // 音量：↑↓选行，←→调值
+    if matches!(g.overlay, Overlay::Volume { .. }) {
+        let sel = match g.overlay {
+            Overlay::Volume { sel } => sel,
+            _ => unreachable!(),
+        };
+        let next = match k {
+            Keycode::Up => sel.saturating_sub(1),
+            Keycode::Down => (sel + 1).min(2),
+            Keycode::Left => {
+                set_volume(g, sel, -5);
                 return;
             }
-            _ => *sel,
+            Keycode::Right => {
+                set_volume(g, sel, 5);
+                return;
+            }
+            _ => sel,
         };
+        if let Overlay::Volume { sel } = &mut g.overlay {
+            *sel = next;
+        }
         return;
     }
     if let Overlay::Gallery { sel, page, full } = &mut g.overlay {
@@ -389,20 +401,19 @@ fn gallery_confirm(g: &mut Game) {
     }
 }
 
-/// 音量/速度滑条调整（dir=±1）
-fn volume_adjust(g: &mut Game, dir: i64) {
-    let Overlay::Volume { sel } = g.overlay else { return };
-    match sel {
+/// 音量/速度统一调整：which 0=BGM 1=SE 2=文字速度（delta 为步进增量）
+fn set_volume(g: &mut Game, which: usize, delta: i64) {
+    match which {
         0 => {
-            g.sys.audio.bgm_vol = (g.sys.audio.bgm_vol as i64 + dir * 5).clamp(0, 100) as i32;
+            g.sys.audio.bgm_vol = (g.sys.audio.bgm_vol as i64 + delta).clamp(0, 100) as i32;
             g.interp.vars.sf.insert("volBgm".into(), Value::Int(g.sys.audio.bgm_vol as i64));
         }
         1 => {
-            g.sys.audio.se_vol = (g.sys.audio.se_vol as i64 + dir * 5).clamp(0, 100) as i32;
+            g.sys.audio.se_vol = (g.sys.audio.se_vol as i64 + delta).clamp(0, 100) as i32;
             g.interp.vars.sf.insert("volSe".into(), Value::Int(g.sys.audio.se_vol as i64));
         }
         _ => {
-            let v = (g.interp.tw.interval_ms as i64 + dir * 5).clamp(5, 200);
+            let v = (g.interp.tw.interval_ms as i64 + delta).clamp(5, 200);
             g.interp.tw.interval_ms = v as f32;
             g.interp.vars.sf.insert("textSpeed".into(), Value::Int(v));
         }
@@ -551,23 +562,15 @@ pub fn auto_step(g: &mut Game, thumbs: &mut ThumbCache) -> Result<(), String> {
 
 /// F5/F6 BGM 音量 −/+，F7/F8 SE 音量 −/+（存 sf.*，规格 §2.4）
 fn volume_hotkey(g: &mut Game, k: Keycode) -> bool {
-    let (delta, is_bgm) = match k {
-        Keycode::F5 => (-10, true),
-        Keycode::F6 => (10, true),
-        Keycode::F7 => (-10, false),
-        Keycode::F8 => (10, false),
+    let (which, delta, name) = match k {
+        Keycode::F5 => (0, -10, "BGM"),
+        Keycode::F6 => (0, 10, "BGM"),
+        Keycode::F7 => (1, -10, "SE"),
+        Keycode::F8 => (1, 10, "SE"),
         _ => return false,
     };
-    let (name, v) = if is_bgm {
-        g.sys.audio.bgm_vol = (g.sys.audio.bgm_vol + delta).clamp(0, 100);
-        g.interp.vars.sf.insert("volBgm".into(), Value::Int(g.sys.audio.bgm_vol as i64));
-        ("BGM", g.sys.audio.bgm_vol)
-    } else {
-        g.sys.audio.se_vol = (g.sys.audio.se_vol + delta).clamp(0, 100);
-        g.interp.vars.sf.insert("volSe".into(), Value::Int(g.sys.audio.se_vol as i64));
-        ("SE", g.sys.audio.se_vol)
-    };
-    g.sys.audio.apply_volumes();
+    set_volume(g, which, delta);
+    let v = if which == 0 { g.sys.audio.bgm_vol } else { g.sys.audio.se_vol };
     g.msg(format!("{name} 音量 {v}"));
     true
 }

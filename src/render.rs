@@ -128,7 +128,6 @@ fn draw_overlay(
                 tc,
                 fonts,
                 thumbs,
-                &g.conf,
                 &g.save_entries,
                 &g.sys.meta.fake_saves,
                 &g.sys.meta.corrupt,
@@ -148,7 +147,7 @@ fn draw_overlay(
                     }
                 }
                 None => {
-                    gallery::draw_grid(tc, fonts, bank, &g.conf, &items, &unlocked, *page, *sel)?;
+                    gallery::draw_grid(tc, fonts, bank, &items, &unlocked, *page, *sel)?;
                 }
             }
         }

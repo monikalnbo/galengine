@@ -9,7 +9,7 @@ use sdl2::rect::Rect;
 use sdl2::render::{BlendMode, Canvas, Texture, TextureCreator};
 use sdl2::video::{Window, WindowContext};
 
-use crate::config::{Config, LOGICAL_W};
+use crate::config::LOGICAL_W;
 use crate::save::meta::FakeSave;
 use crate::save::slots::SaveEntry;
 use crate::text::font::FontBook;
@@ -90,7 +90,6 @@ pub fn draw(
     canvas: &mut Canvas<Window>,
     fonts: &mut FontBook,
     thumbs: &ThumbCache,
-    _conf: &Config,
     entries: &[(usize, Option<SaveEntry>)],
     fake: &[FakeSave],
     corrupt: &[usize],

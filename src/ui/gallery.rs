@@ -6,7 +6,7 @@ use sdl2::rect::Rect;
 use sdl2::render::{BlendMode, Canvas};
 use sdl2::video::Window;
 
-use crate::config::{self, Config, LOGICAL_H, LOGICAL_W};
+use crate::config::{self, LOGICAL_H, LOGICAL_W};
 use crate::gfx::assets::TextureBank;
 use crate::text::font::FontBook;
 
@@ -59,7 +59,6 @@ pub fn draw_grid(
     canvas: &mut Canvas<Window>,
     fonts: &mut FontBook,
     bank: &mut TextureBank,
-    conf: &Config,
     items: &[String],
     unlocked: &[String],
     page: usize,
@@ -73,7 +72,6 @@ pub fn draw_grid(
     let tex = fonts.render_text(30, Color::RGB(230, 234, 244), &title)?;
     let q = tex.query();
     canvas.copy(tex, None, Some(Rect::new(76, 70, q.width, q.height)))?;
-    let _ = conf;
 
     let start = page * per_page();
     for i in 0..per_page() {

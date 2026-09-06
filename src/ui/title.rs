@@ -38,10 +38,11 @@ pub fn draw(
 
     let (size, alpha, green) = evolve_fx(evolve);
     let title = conf.title.clone();
-    let mut shown: String = title.chars().take(14).collect(); // 小字阶段截断
-    if evolve == "small" {
-        shown = format!("{}……", title.chars().take(6).collect::<String>());
-    }
+    let shown = if evolve == "small" {
+        format!("{}……", title.chars().take(6).collect::<String>())
+    } else {
+        title.chars().take(14).collect()
+    };
     let color = if green {
         Color::RGBA(140, 220, 170, alpha)
     } else {
