@@ -132,8 +132,12 @@ impl Command {
                     _ => err("input 用法：input 变量 提示|宽度|默认值"),
                 }
             }
-            "meta_fake_save" => match tokens.as_slice() {
-                [d, t, img] => Ok(Command::MetaFakeSave { date: d.to_string(), time: t.to_string(), image: img.to_string() }),
+            "meta_fake_save" => match rest.split('|').collect::<Vec<_>>()[..] {
+                [d, t, img] => Ok(Command::MetaFakeSave {
+                    date: d.trim().to_string(),
+                    time: t.trim().to_string(),
+                    image: img.trim().to_string(),
+                }),
                 _ => err("meta_fake_save 用法：meta_fake_save 日期|时间|图片"),
             },
             "meta_corrupt" => match tokens.as_slice() {

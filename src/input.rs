@@ -531,8 +531,8 @@ pub fn auto_step(g: &mut Game, thumbs: &mut ThumbCache) -> Result<(), String> {
             Overlay::Save { .. } | Overlay::Gallery { .. } | Overlay::Volume { .. } => {
                 g.overlay = Overlay::None;
             }
-            Overlay::Ritual { step, .. } => {
-                g.overlay = Overlay::Ritual { step: step + 1, fade: 0.0, done: false };
+            Overlay::Ritual { step, fade, .. } => {
+                g.overlay = Overlay::Ritual { step: step + 1, fade, done: false };
             }
             _ => {}
         }
