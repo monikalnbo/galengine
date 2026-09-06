@@ -1,3 +1,4 @@
+pub mod bottombar;
 pub mod choice;
 pub mod dialog;
 pub mod gallery;

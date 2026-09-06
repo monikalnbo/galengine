@@ -72,15 +72,15 @@ pub fn draw(
     };
     let tex = fonts.render_text(size, color, &shown)?;
     let q = tex.query();
-    let y = if size > 60 { 120 } else { 180 };
+    let y = if size > 60 { 100 } else { 160 };
     canvas.copy(tex, None, Some(Rect::new((LOGICAL_W - q.width) as i32 / 2, y, q.width, q.height)))?;
 
     // 呼吸提示
     let a = (150.0 + 100.0 * (now_ms / 900.0).sin()) as u8;
     let tex = fonts.render_text(22, Color::RGBA(170, 178, 200, a), "— select —")?;
     let q = tex.query();
-    canvas.copy(tex, None, Some(Rect::new((LOGICAL_W - q.width) as i32 / 2, 330, q.width, q.height)))?;
+    canvas.copy(tex, None, Some(Rect::new((LOGICAL_W - q.width) as i32 / 2, 238, q.width, q.height)))?;
 
-    menu::draw(canvas, fonts, &crate::ui::overlay::title_items(), sel, 380, false)?;
+    menu::draw(canvas, fonts, &crate::ui::overlay::title_items(), sel, 270, false)?;
     Ok(())
 }

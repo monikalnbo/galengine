@@ -60,18 +60,18 @@ pub enum Hit {
 
 fn box_rect(w: &InputUi) -> Rect {
     let bw = w.spec.width.max(360);
-    Rect::new((LOGICAL_W as i32 - bw as i32) / 2, 320, bw, 70)
+    Rect::new((LOGICAL_W as i32 - bw as i32) / 2, 270, bw, 70)
 }
 
 fn preset_rect(i: usize) -> Rect {
     let gap = 24;
     let total = 3 * 150 + 2 * gap;
     let x0 = (LOGICAL_W as i32 - total) / 2;
-    Rect::new(x0 + i as i32 * (150 + gap), 430, 150, 54)
+    Rect::new(x0 + i as i32 * (150 + gap), 400, 150, 54)
 }
 
 fn confirm_rect() -> Rect {
-    Rect::new((LOGICAL_W - 260) as i32 / 2, 520, 260, 60)
+    Rect::new((LOGICAL_W - 260) as i32 / 2, 480, 260, 60)
 }
 
 pub fn hit_test(w: &InputUi, x: f32, y: f32) -> Option<Hit> {
@@ -86,10 +86,14 @@ pub fn hit_test(w: &InputUi, x: f32, y: f32) -> Option<Hit> {
 pub fn draw(canvas: &mut Canvas<Window>, fonts: &mut FontBook, w: &InputUi) -> Result<(), String> {
     canvas.set_blend_mode(BlendMode::Blend);
 
+    // 压暗纱：隔开游戏画面，亮背景下元素不再看不清（v0.1.1）
+    canvas.set_draw_color(Color::RGBA(0, 0, 0, 160));
+    canvas.fill_rect(Rect::new(0, 0, LOGICAL_W, 720))?;
+
     // 提示语
     let tex = fonts.render_text(FONT, Color::RGB(235, 235, 240), &w.spec.prompt)?;
     let q = tex.query();
-    canvas.copy(tex, None, Some(centered(q.width, q.height, 220)))?;
+    canvas.copy(tex, None, Some(centered(q.width, q.height, 180)))?;
 
     // 输入框（光标闪烁）
     let br = box_rect(w);
@@ -125,7 +129,7 @@ pub fn draw(canvas: &mut Canvas<Window>, fonts: &mut FontBook, w: &InputUi) -> R
     // 小字说明
     let tex = fonts.render_text(SMALL, Color::RGB(140, 148, 170), "直接键入（支持输入法）· 或点选预设名")?;
     let q = tex.query();
-    canvas.copy(tex, None, Some(centered(q.width, q.height, 610)))
+    canvas.copy(tex, None, Some(centered(q.width, q.height, 575)))
 }
 
 /// 半透明按钮（choice/预设/确认/菜单通用原语）

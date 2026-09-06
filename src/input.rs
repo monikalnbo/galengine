@@ -17,7 +17,7 @@ use crate::ui::inputbox::{self, Hit};
 use crate::ui::overlay::{esc_items, title_items, Overlay};
 use crate::ui::ritual;
 use crate::ui::savemenu::{self, ThumbCache};
-use crate::ui::{choice, menu};
+use crate::ui::{bottombar, choice, menu};
 
 /// 处理一条事件；返回 false=请求退出
 #[allow(clippy::too_many_arguments)]
@@ -169,7 +169,7 @@ fn click(
     if g.overlay.active() {
         match g.overlay.clone() {
             Overlay::Menu { .. } => {
-                if let Some(i) = menu::hit_test(esc_items().len(), 250, lx, ly) {
+                if let Some(i) = menu::hit_test(esc_items().len(), 100, lx, ly) {
                     g.overlay = Overlay::Menu { sel: i };
                     if !menu_activate(g, i, canvas, renderer, thumbs)? {
                         return Ok(false);
@@ -191,7 +191,7 @@ fn click(
                 }
             }
             Overlay::Title { .. } => {
-                if let Some(i) = menu::hit_test(title_items().len(), 380, lx, ly) {
+                if let Some(i) = menu::hit_test(title_items().len(), 270, lx, ly) {
                     g.overlay = Overlay::Title { sel: i };
                     if !title_activate(g, i, thumbs)? {
                         return Ok(false);
@@ -216,6 +216,12 @@ fn click(
         }
         return Ok(true);
     }
+    // 底部功能条：自动/快进/存档/读档/设置（输入界面不显示，避免与确认键拥挤）
+    if g.started && !matches!(g.interp.state, RunState::WaitInput(_)) {
+        if let Some(i) = bottombar::hit(lx as i32, ly as i32) {
+            return bottombar_activate(g, i, thumbs);
+        }
+    }
     match &g.interp.state {
         RunState::WaitChoice { .. } => {
             if let Some(i) = choice::hit_test(g.choice_len(), lx, ly) {
@@ -234,6 +240,30 @@ fn click(
             None => {}
         },
         RunState::WaitClick => g.interp.click()?,
+        _ => {}
+    }
+    Ok(true)
+}
+
+/// 底部功能条按钮：0自动 1快进 2存档 3读档 4设置
+fn bottombar_activate(
+    g: &mut Game,
+    idx: usize,
+    thumbs: &mut ThumbCache,
+) -> Result<bool, String> {
+    match idx {
+        0 => {
+            g.auto = !g.auto;
+            g.auto_acc = 0.0;
+            g.msg(if g.auto { "自动：开" } else { "自动：关" });
+        }
+        1 => {
+            g.ctrl_hold = !g.ctrl_hold;
+            g.msg(if g.ctrl_hold { "快进：开（再点一次停止）" } else { "快进：关" });
+        }
+        2 => open_save_menu(g, thumbs, true),
+        3 => open_save_menu(g, thumbs, false),
+        4 => g.overlay = Overlay::Volume { sel: 0 },
         _ => {}
     }
     Ok(true)

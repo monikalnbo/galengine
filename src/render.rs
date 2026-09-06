@@ -13,7 +13,7 @@ use crate::script::interp::RunState;
 use crate::systems::Game;
 use crate::text::font::FontBook;
 use crate::ui::overlay::{esc_items, Overlay};
-use crate::ui::{choice, dialog, gallery, inputbox, menu, ritual, savemenu, title, volume};
+use crate::ui::{bottombar, choice, dialog, gallery, inputbox, menu, ritual, savemenu, title, volume};
 
 pub fn frame(
     g: &mut Game,
@@ -54,7 +54,10 @@ pub fn frame(
         if g.started {
             g.interp.stage.draw(tc, bank)?;
             match &g.interp.state {
-                RunState::WaitChoice { prompt, items } => choice::draw(tc, fonts, prompt, items, sel)?,
+                RunState::WaitChoice { prompt, items } => {
+                    choice::draw(tc, fonts, prompt, items, sel)?;
+                    bottombar::draw(tc, fonts, auto, g.ctrl_hold)?;
+                }
                 RunState::WaitInput(_) => {
                     if let Some(ui) = &g.input_ui {
                         inputbox::draw(tc, fonts, ui)?;
@@ -62,11 +65,7 @@ pub fn frame(
                 }
                 _ => {
                     dialog::draw(tc, fonts, style, name.as_deref(), &g.interp.tw, now)?;
-                    if auto {
-                        let tex = fonts.render_text(22, Color::RGB(110, 220, 255), "AUTO")?;
-                        let q = tex.query();
-                        tc.copy(tex, None, Some(Rect::new(1170, 486, q.width.max(60), q.height.max(26))))?;
-                    }
+                    bottombar::draw(tc, fonts, auto, g.ctrl_hold)?;
                 }
             }
         }
@@ -118,7 +117,7 @@ fn draw_overlay(
     match &g.overlay {
         Overlay::None => {}
         Overlay::Menu { sel } => {
-            menu::draw(tc, fonts, &esc_items(), *sel, 250, true)?;
+            menu::draw(tc, fonts, &esc_items(), *sel, 100, true)?;
         }
         Overlay::Title { sel, .. } => {
             title::draw(tc, fonts, bank, &g.conf, &g.sys.meta.title_evolve, *sel, g.now_ms)?;
