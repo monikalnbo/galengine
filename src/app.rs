@@ -4,10 +4,10 @@
 use std::env;
 use std::time::{Duration, Instant};
 
-use sdl2::event::Event;
-use sdl2::pixels::Color;
 
-use crate::config::{self, Config};
+
+
+use crate::config;
 use crate::gfx::assets::{self, TextureBank};
 use crate::gfx::renderer::Renderer;
 use crate::script::interp::{Interp, RunState};
@@ -35,6 +35,7 @@ pub fn run() -> Result<(), String> {
     let mut renderer = Renderer::new(&creator)?;
     let mut bank = TextureBank::new(&creator);
     let mut fonts = FontBook::new(&ttf, &creator, &conf.fonts)?;
+    let mut thumbs = crate::ui::savemenu::ThumbCache::new(&creator);
 
     // 全局变量（sf.*）加载 + 首次启动种子默认名
     let global_path = format!("{}/global.json", conf.save_dir);
@@ -70,7 +71,7 @@ pub fn run() -> Result<(), String> {
         // 输入态生命周期（进入/离开 WaitInput）
         maintain_input_ui(&mut g);
         for ev in events.poll_iter() {
-            if !crate::input::dispatch(&mut g, ev, &mut canvas, &mut fonts)? {
+            if !crate::input::dispatch(&mut g, ev, &mut canvas, &mut fonts, &mut renderer, &mut thumbs)? {
                 break 'running;
             }
         }
@@ -138,7 +139,7 @@ pub fn run() -> Result<(), String> {
             break 'running;
         }
 
-        crate::render::frame(&mut g, &mut fonts, &mut bank, &mut renderer, &mut canvas)?;
+        crate::render::frame(&mut g, &mut fonts, &mut bank, &mut renderer, &mut canvas, &mut thumbs)?;
 
         let spent = t0.elapsed();
         if spent < budget {

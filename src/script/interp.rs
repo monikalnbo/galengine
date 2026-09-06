@@ -38,7 +38,7 @@ pub enum SysEvent {
     DesktopOpen(String),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum RunState {
     WaitClick,
     WaitTimer { left_ms: f32 },

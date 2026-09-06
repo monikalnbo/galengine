@@ -12,7 +12,8 @@ use crate::gfx::renderer::Renderer;
 use crate::script::interp::RunState;
 use crate::systems::Game;
 use crate::text::font::FontBook;
-use crate::ui::{choice, dialog, inputbox, overlay::Overlay};
+use crate::ui::overlay::menu_items;
+use crate::ui::{choice, dialog, inputbox, menu, overlay::Overlay, ritual, savemenu};
 
 pub fn frame(
     g: &mut Game,
@@ -20,6 +21,7 @@ pub fn frame(
     bank: &mut TextureBank,
     renderer: &mut Renderer,
     canvas: &mut Canvas<Window>,
+    thumbs: &mut savemenu::ThumbCache,
 ) -> Result<(), String> {
     // 抖动偏移：幅度随剩余时间衰减
     let (dx, dy) = match &g.sys.shake {
@@ -66,8 +68,8 @@ pub fn frame(
                 }
             }
         }
-        // 覆盖层（M4 实装：菜单/存档/鉴赏/音量/仪式/关机）
-        draw_overlay(tc, g, fonts)?;
+        // 覆盖层
+        draw_overlay(tc, g, fonts, thumbs)?;
         Ok(())
     })?;
 
@@ -102,16 +104,33 @@ pub fn frame(
     Ok(())
 }
 
-/// 覆盖层绘制（M4 实装各界面；Rest=M5）
+/// 覆盖层绘制
 fn draw_overlay(
     tc: &mut Canvas<Window>,
     g: &Game,
     fonts: &mut FontBook,
+    thumbs: &savemenu::ThumbCache,
 ) -> Result<(), String> {
     match &g.overlay {
         Overlay::None => {}
-        Overlay::Ritual { step, fade } => {
-            crate::ui::ritual::draw(tc, fonts, &g.conf, *step, *fade)?;
+        Overlay::Menu { sel } => {
+            menu::draw(tc, fonts, &menu_items(), *sel, 250, true)?;
+        }
+        Overlay::Save { mode_save, sel } => {
+            savemenu::draw(
+                tc,
+                fonts,
+                thumbs,
+                &g.conf,
+                &g.save_entries,
+                &g.sys.meta.fake_saves,
+                &g.sys.meta.corrupt,
+                *mode_save,
+                *sel,
+            )?;
+        }
+        Overlay::Ritual { step, fade, .. } => {
+            ritual::draw(tc, fonts, &g.conf, *step, *fade)?;
         }
         _ => {}
     }

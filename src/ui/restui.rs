@@ -9,6 +9,10 @@ use crate::config::{Config, LOGICAL_H, LOGICAL_W};
 use crate::text::font::FontBook;
 use crate::ui::inputbox::button;
 
+pub fn cancel_rect() -> Rect {
+    Rect::new((LOGICAL_W - 240) as i32 / 2, 500, 240, 62)
+}
+
 pub fn draw(
     canvas: &mut Canvas<Window>,
     fonts: &mut FontBook,
@@ -29,6 +33,6 @@ pub fn draw(
     let q = tex.query();
     canvas.copy(tex, None, Some(Rect::new((LOGICAL_W - q.width) as i32 / 2, 320, q.width, q.height)))?;
 
-    button(canvas, fonts, Rect::new((LOGICAL_W - 240) as i32 / 2, 500, 240, 62), "「再待一会儿」", false)?;
+    button(canvas, fonts, cancel_rect(), "「再待一会儿」", false)?;
     Ok(())
 }

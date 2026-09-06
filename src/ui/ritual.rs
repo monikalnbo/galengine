@@ -10,6 +10,14 @@ use crate::config::{Config, LOGICAL_H, LOGICAL_W};
 use crate::text::font::FontBook;
 use crate::ui::inputbox::button;
 
+pub fn del_rect() -> Rect {
+    Rect::new(LOGICAL_W as i32 / 2 - 220, 420, 200, 62)
+}
+
+pub fn back_rect() -> Rect {
+    Rect::new(LOGICAL_W as i32 / 2 + 20, 420, 200, 62)
+}
+
 pub fn draw(
     canvas: &mut Canvas<Window>,
     fonts: &mut FontBook,
@@ -41,8 +49,8 @@ pub fn draw(
         canvas.fill_rect(Rect::new(LOGICAL_W as i32 / 2 - 44 + i as i32 * 44, 320, 24, 8))?;
     }
 
-    button(canvas, fonts, Rect::new(LOGICAL_W as i32 / 2 - 220, 420, 200, 62), "「删除」", true)?;
-    button(canvas, fonts, Rect::new(LOGICAL_W as i32 / 2 + 20, 420, 200, 62), "「回头」", false)?;
+    button(canvas, fonts, del_rect(), "「删除」", true)?;
+    button(canvas, fonts, back_rect(), "「回头」", false)?;
 
     // 渐白光页（第三击后 fade 0→1）
     if fade > 0.0 {

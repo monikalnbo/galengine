@@ -7,10 +7,11 @@ use sdl2::video::Window;
 use crate::audio::Audio;
 use crate::config::Config;
 use crate::save::meta::MetaState;
+use crate::save::slots::{self, SaveEntry};
 use crate::script::interp::{Interp, RunState, SysEvent};
 use crate::ui::dialog::DialogStyle;
-use crate::ui::overlay::Overlay;
 use crate::ui::inputbox::InputUi;
+use crate::ui::overlay::Overlay;
 
 pub struct ShakeSt {
     pub left_ms: f32,
@@ -56,6 +57,8 @@ pub struct Game {
     pub overlay: Overlay,
     pub choice_sel: usize,
     pub input_ui: Option<InputUi>,
+    /// 存档界面展示用槽位快照（开界面时刷新）
+    pub save_entries: Vec<(usize, Option<SaveEntry>)>,
     pub auto: bool,
     pub auto_acc: f32,
     pub ctrl_hold: bool,
@@ -88,6 +91,7 @@ impl Game {
             overlay: Overlay::None,
             choice_sel: 0,
             input_ui: None,
+            save_entries: Vec::new(),
             auto: false,
             auto_acc: 0.0,
             ctrl_hold: false,
@@ -102,7 +106,14 @@ impl Game {
         self.sys.msg = Some(Msg { text: text.into(), left_ms: 3000.0 });
     }
 
-    /// 帧计时：抖动/越界淡入淡出/关机倒计时/提示
+    /// 刷新存档界面快照
+    pub fn refresh_saves(&mut self) {
+        self.save_entries = (1..=self.sys.slots)
+            .map(|s| (s, slots::load(&self.sys.save_dir, s)))
+            .collect();
+    }
+
+    /// 帧计时：抖动/越界淡入淡出/关机倒计时/提示/仪式渐白
     pub fn tick(&mut self, dt_ms: f32) {
         self.now_ms += dt_ms;
         if let Some(s) = &mut self.sys.shake {
@@ -132,6 +143,25 @@ impl Game {
         }
         if let Some(ui) = &mut self.input_ui {
             ui.blink += dt_ms;
+        }
+        // 仪式删档：三击后渐白，白满真删（备份 backup/）
+        let mut ritual_done = false;
+        if let Overlay::Ritual { step, fade, done } = &mut self.overlay {
+            if *step >= 3 && !*done {
+                *fade += dt_ms / 1200.0;
+                if *fade >= 1.0 {
+                    *done = true;
+                    ritual_done = true;
+                }
+            }
+        }
+        if ritual_done {
+            let n = self.sys.slots;
+            let dir = self.sys.save_dir.clone();
+            if let Some(slot) = slots::delete_latest(&dir, n) {
+                self.msg(format!("……删掉了。（槽 {slot} 已备份）"));
+            }
+            self.overlay = Overlay::None;
         }
     }
 
@@ -169,7 +199,7 @@ impl Game {
             SysEvent::MetaDeleteLast => {
                 // 有可删的存档才进入仪式；否则提示并跳过（M3 slots 接入真删）
                 if crate::save::slots::latest_slot(&self.sys.save_dir, self.sys.slots).is_some() {
-                    self.overlay = Overlay::Ritual { step: 0, fade: 0.0 };
+                    self.overlay = Overlay::Ritual { step: 0, fade: 0.0, done: false };
                 } else {
                     self.msg("这里没有可以删除的存档。");
                 }
