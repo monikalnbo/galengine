@@ -73,6 +73,18 @@ impl Default for Stage {
 }
 
 impl Stage {
+    /// 演出层快照（存档用：各层当前路径）
+    pub fn snapshot(&self) -> crate::save::slots::StageSnap {
+        crate::save::slots::StageSnap {
+            bg: self.bg.cur().cloned(),
+            chars: [
+                self.chars[0].cur().cloned(),
+                self.chars[1].cur().cloned(),
+                self.chars[2].cur().cloned(),
+            ],
+            cg: self.cg.cur().cloned(),
+        }
+    }
     pub fn tick(&mut self, dt_ms: f32) {
         self.bg.tick(dt_ms);
         for c in &mut self.chars {

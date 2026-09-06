@@ -1,4 +1,6 @@
-//! 底部对话框：半透明盒 + 名字牌（角色色）+ 正文（打字机部分显示）。
+//! 底部对话框：半透明盒 + 名字牌（角色色，游戏侧配置）+ 正文（打字机部分显示）。
+
+use std::collections::HashMap;
 
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
@@ -6,26 +8,14 @@ use sdl2::render::Canvas;
 use sdl2::render::BlendMode;
 use sdl2::video::Window;
 
-
 use crate::text::font::FontBook;
 use crate::text::writer::Typewriter;
 
-/// 角色名颜色表（name_color 查不到时用白）
-const NAME_COLORS: &[(&str, (u8, u8, u8))] = &[
-    ("澪", (150, 214, 255)),    // 天蓝
-    ("千岁", (255, 196, 96)),   // 琥珀
-    ("夏乃", (255, 168, 64)),   // 向日葵橙
-    ("时雨", (186, 164, 255)),  // 淡紫
-    ("小夜", (255, 150, 190)),  // 粉
-    ("莲", (140, 240, 190)),    // 薄荷绿
-    ("拓海", (198, 208, 224)),  // 灰白
-];
-
-pub fn name_color(name: &str) -> Color {
-    NAME_COLORS
-        .iter()
-        .find(|(n, _)| *n == name)
-        .map(|(_, (r, g, b))| Color::RGB(*r, *g, *b))
+/// 名字颜色（查不到时白；色表来自配置 game.name_colors）
+pub fn name_color(name: &str, colors: &HashMap<String, [u8; 3]>) -> Color {
+    colors
+        .get(name)
+        .map(|[r, g, b]| Color::RGB(*r, *g, *b))
         .unwrap_or(Color::RGB(235, 235, 240))
 }
 
@@ -38,17 +28,19 @@ pub struct DialogStyle {
     pub name_font_size: u16,
     /// 单页最大行数
     pub lines_per_page: usize,
+    /// 角色名颜色表
+    pub name_colors: HashMap<String, [u8; 3]>,
 }
 
 impl Default for DialogStyle {
     fn default() -> Self {
-        Self::from_cfg(&crate::config::DialogCfg::default())
+        Self::from_cfg(&crate::config::DialogCfg::default(), HashMap::new())
     }
 }
 
 impl DialogStyle {
     /// 从顶层配置构建（分层化：唯一配置源 data/config.json）
-    pub fn from_cfg(c: &crate::config::DialogCfg) -> Self {
+    pub fn from_cfg(c: &crate::config::DialogCfg, colors: HashMap<String, [u8; 3]>) -> Self {
         Self {
             box_rect: Rect::new(c.box_rect[0], c.box_rect[1], c.box_rect[2] as u32, c.box_rect[3] as u32),
             text_x: c.text_x,
@@ -56,6 +48,7 @@ impl DialogStyle {
             font_size: c.font_size,
             name_font_size: c.name_font_size,
             lines_per_page: c.lines_per_page,
+            name_colors: colors,
         }
     }
 }
@@ -80,7 +73,7 @@ pub fn draw(
     // 名字牌：悬于盒子上沿左侧
     if let Some(name) = name {
         if !name.is_empty() {
-            let color = name_color(name);
+            let color = name_color(name, &style.name_colors);
             let tex = fonts.render_text(style.name_font_size, color, name)?;
             let q = tex.query();
             let plate = Rect::new(

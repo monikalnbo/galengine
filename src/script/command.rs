@@ -30,8 +30,12 @@ pub enum Command {
     Jump { file: Option<String>, label: String },
     /// if 条件 *target（== != >= <= > <）
     If { var: String, op: String, val: String, target: String },
-    /// choice 提示 + 选项（lexer 已收集）
-    Choice { prompt: String, items: Vec<(String, String)> },
+    /// choice 提示 + 选项（lexer 已收集；prompt 保留给选项界面的标题显示，暂未消费）
+    Choice {
+        #[allow(dead_code)]
+        prompt: String,
+        items: Vec<(String, String)>,
+    },
     /// input 变量 提示|宽度|默认值
     Input { var: String, prompt: String, width: u32, default: String },
     // ---- Meta API（A6）----
@@ -45,6 +49,14 @@ pub enum Command {
     WindowFxTitle(String),
     /// shutdown [秒]
     Shutdown(u32),
+    /// 桌面创建/追加文本文件（meta 演出）：desktop_write 文件|内容
+    DesktopWrite { file: String, content: String },
+    /// 打开桌面文件：desktop_open 文件
+    DesktopOpen(String),
+    /// 收回越界层
+    ReachHide,
+    /// 恢复窗口标题
+    WindowFxTitleRestore,
     End,
 }
 
@@ -167,14 +179,17 @@ impl Command {
                     _ => err("input 用法：input 变量 提示|宽度|默认值"),
                 }
             }
-            "meta_fake_save" => match tokens.as_slice() {
-                [d, t, img] => Ok(Command::MetaFakeSave {
-                    date: d.to_string(),
-                    time: t.to_string(),
-                    image: img.to_string(),
-                }),
-                _ => err("meta_fake_save 用法：meta_fake_save 日期|时间|图片"),
-            },
+            "meta_fake_save" => {
+                let parts: Vec<&str> = rest.split('|').collect();
+                match parts.as_slice() {
+                    [d, t, img] => Ok(Command::MetaFakeSave {
+                        date: d.trim().to_string(),
+                        time: t.trim().to_string(),
+                        image: img.trim().to_string(),
+                    }),
+                    _ => err("meta_fake_save 用法：meta_fake_save 日期|时间|图片"),
+                }
+            }
             "meta_corrupt" => match tokens.as_slice() {
                 [n] => Ok(Command::MetaCorrupt(n.to_string())),
                 _ => err("meta_corrupt 用法：meta_corrupt N|all"),
@@ -185,6 +200,7 @@ impl Command {
                 _ => err("title_evolve 用法：title_evolve check"),
             },
             "reach" => match tokens.as_slice() {
+                ["hide"] => Ok(Command::ReachHide),
                 [s] => Ok(Command::Reach { storage: s.to_string(), dur_ms: 1500, scale: 1.8 }),
                 [s, ms] => Ok(Command::Reach { storage: s.to_string(), dur_ms: num(ms)?, scale: 1.8 }),
                 [s, ms, sc] => Ok(Command::Reach {
@@ -195,6 +211,7 @@ impl Command {
                 _ => err("reach 用法：reach 素材 [ms] [倍率]"),
             },
             "window_fx" => match tokens.as_slice() {
+                ["title", "restore"] | ["title", "default"] => Ok(Command::WindowFxTitleRestore),
                 ["shake", ms] => Ok(Command::WindowFxShake(num(ms)?)),
                 ["title", ..] => Ok(Command::WindowFxTitle(rest.trim_start_matches("title").trim().to_string())),
                 _ => err("window_fx 用法：window_fx shake ms / window_fx title 文字"),
@@ -203,6 +220,19 @@ impl Command {
                 [] => Ok(Command::Shutdown(300)),
                 [s] => Ok(Command::Shutdown(num(s)?)),
                 _ => err("shutdown 用法：shutdown [秒]"),
+            },
+            "desktop_write" => {
+                let (f, c) = rest
+                    .split_once('|')
+                    .ok_or_else(|| format!("{ctx}：desktop_write 用法：desktop_write 文件名|内容"))?;
+                Ok(Command::DesktopWrite {
+                    file: f.trim().to_string(),
+                    content: c.to_string(),
+                })
+            }
+            "desktop_open" => match tokens.as_slice() {
+                [f] => Ok(Command::DesktopOpen(f.to_string())),
+                _ => err("desktop_open 用法：desktop_open 文件名"),
             },
             "end" if tokens.is_empty() => Ok(Command::End),
             other => Err(format!("{ctx}：未知指令「{other}」")),

@@ -14,6 +14,7 @@ use sdl2::render::{Texture, TextureCreator};
 use sdl2::ttf::{Font, Sdl2TtfContext};
 use sdl2::video::WindowContext;
 
+#[allow(dead_code)]
 const FONT_CANDIDATES: &[&str] = &[
     "game/data/system/font.ttf",                                  // 随包（未来）
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",     // Linux
@@ -65,6 +66,7 @@ impl<'a> FontBook<'a> {
     }
 
     /// 内置候选（配置未提供时）
+    #[allow(dead_code)]
     pub fn builtin_candidates() -> Vec<String> {
         FONT_CANDIDATES.iter().map(|s| s.to_string()).collect()
     }
@@ -120,6 +122,7 @@ impl<'a> FontBook<'a> {
     }
 
     /// 单字符宽度（打字机部分显示/断行用）
+    #[allow(dead_code)]
     pub fn char_w(&mut self, size: u16, ch: char) -> u32 {
         self.font(size)
             .ok()

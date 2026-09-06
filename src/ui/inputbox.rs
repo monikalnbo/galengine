@@ -13,6 +13,7 @@ const FONT: u16 = 30;
 const SMALL: u16 = 24;
 
 pub struct InputUi {
+    #[allow(dead_code)]
     pub var: String,
     pub prompt: String,
     pub width: u32,
@@ -25,11 +26,8 @@ pub struct InputUi {
 }
 
 impl InputUi {
-    pub fn new(var: &str, prompt: &str, width: u32, default: &str) -> Self {
-        let presets: Vec<String> = match var.trim_start_matches("sf.").trim_start_matches("f.") {
-            "playerName" => vec!["你", "读者", "旅行者"].into_iter().map(String::from).collect(),
-            _ => vec!["拓海", "拓人", "海斗"].into_iter().map(String::from).collect(),
-        };
+    /// presets 由游戏侧配置提供（game.input_presets）；空则不显示预设按钮
+    pub fn new(var: &str, prompt: &str, width: u32, default: &str, presets: Vec<String>) -> Self {
         Self {
             var: var.to_string(),
             prompt: prompt.to_string(),

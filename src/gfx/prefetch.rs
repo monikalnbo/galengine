@@ -16,6 +16,7 @@ pub struct Decoded {
     pub pixels: Vec<u8>,
 }
 
+#[allow(dead_code)]
 enum Msg {
     Req(String),
     Done(String, Result<Arc<Decoded>, String>),

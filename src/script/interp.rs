@@ -45,13 +45,34 @@ pub struct InputSpec {
 /// 连续执行保护上限（防 label 死循环）
 const MAX_STEPS: usize = 10_000;
 
+/// 剧本→引擎 的演出事件（app 每帧 drain：音频/meta/窗口/关机）
+#[derive(Debug, Clone)]
+pub enum GameEvent {
+    Bgm(String),
+    Se(String),
+    FakeSave { date: String, time: String, image: String },
+    Corrupt(String),
+    DeleteLast,
+    TitleEvolve(String),
+    Reach { storage: String, dur_ms: u32, scale: f32 },
+    Shake(u32),
+    TitleFx(String),
+    Shutdown(u32),
+    DesktopWrite { file: String, content: String },
+    DesktopOpen(String),
+    ReachHide,
+    TitleRestore,
+}
+
 pub struct Interp {
     /// 文件名（不含路径）-> 行序列
     scripts: HashMap<String, Vec<Line>>,
     /// (文件名, label) -> 行号
     labels: HashMap<(String, String), usize>,
-    file: String,
-    pc: usize,
+    /// 文件名 -> 内容指纹（存档改版检测）
+    digests: HashMap<String, u64>,
+    pub file: String,
+    pub pc: usize,
     pub state: RunState,
     pub stage: Stage,
     pub vars: Vars,
@@ -60,6 +81,10 @@ pub struct Interp {
     pub cur_name: Option<String>,
     /// 待断行台词（需 FontBook，由 app 每帧 apply_pending 处理）
     pending_text: Option<String>,
+    /// 演出事件队列（app drain：音频/meta/窗口/关机）
+    pub events: Vec<GameEvent>,
+    /// 双名字默认值（{hero}/{you} 替换，游戏侧配置提供）
+    pub name_defaults: (String, String),
 }
 
 impl Interp {
@@ -67,6 +92,7 @@ impl Interp {
         Self {
             scripts: HashMap::new(),
             labels: HashMap::new(),
+            digests: HashMap::new(),
             file: String::new(),
             pc: 0,
             state: RunState::Ended,
@@ -75,6 +101,8 @@ impl Interp {
             tw: Typewriter::new(typewriter_ms),
             cur_name: None,
             pending_text: None,
+            events: Vec::new(),
+            name_defaults: (String::new(), String::new()),
         }
     }
 
@@ -98,6 +126,59 @@ impl Interp {
         out
     }
 
+    /// 双名字替换：{hero}/{you}（台词与桌面文件共用）
+    pub fn substitute_names(&self, text: &str) -> String {
+        let hero = self.display_name("f.heroName", &self.name_defaults.0);
+        let you = self.display_name("sf.playerName", &self.name_defaults.1);
+        text.replace("{hero}", &hero).replace("{you}", &you)
+    }
+
+    /// 显示名：变量须为非空字符串，否则用默认
+    fn display_name(&self, var: &str, default: &str) -> String {
+        match self.vars.get(var) {
+            Some(crate::script::vars::Value::Str(s)) if !s.is_empty() => s.clone(),
+            _ => default.to_string(),
+        }
+    }
+
+    /// 存档恢复点：当前等待行的行号（重跑=重现当前演出）
+    pub fn pc_at_wait(&self) -> usize {
+        self.pc.saturating_sub(1)
+    }
+
+    /// 当前主剧本指纹（存档写入用）
+    pub fn current_digest(&self) -> u64 {
+        self.digests.get(&self.file).copied().unwrap_or(0)
+    }
+
+    /// 读档恢复：校验指纹 → 恢复演出层 → 从台词行重跑（重打当前句）
+    pub fn restore(
+        &mut self,
+        file: &str,
+        pc: usize,
+        f_vars: std::collections::HashMap<String, crate::script::vars::Value>,
+        digest: u64,
+        snap: &crate::save::slots::StageSnap,
+    ) -> Result<(), String> {
+        self.load(file)?;
+        let cur = self.digests.get(file).copied().unwrap_or(0);
+        if cur != digest {
+            return Err("存档与当前剧本版本不一致，无法读取。".into());
+        }
+        self.file = file.to_string();
+        self.pc = pc;
+        self.vars.f = f_vars;
+        self.cur_name = None;
+        self.tw.clear();
+        // 演出层按快照直切
+        self.stage.bg.set(snap.bg.clone(), 0);
+        for (i, c) in snap.chars.iter().enumerate() {
+            self.stage.chars[i].set(c.clone(), 0);
+        }
+        self.stage.cg.set(snap.cg.clone(), 0);
+        self.run_until_wait()
+    }
+
     fn script_path(file: &str) -> String {
         format!("{}/scenario/{}", crate::config::data_dir(), file)
     }
@@ -110,6 +191,7 @@ impl Interp {
         let path = Self::script_path(file);
         let src = std::fs::read_to_string(&path)
             .map_err(|e| format!("剧本文件读取失败：{path}（{e}）"))?;
+        self.digests.insert(file.to_string(), crate::save::slots::digest_of(&src));
         let lines = lexer::parse_script(&src).map_err(|e| format!("{file}：{e}"))?;
         for (i, line) in lines.iter().enumerate() {
             if let LineKind::Label(label) = &line.kind {
@@ -133,15 +215,7 @@ impl Interp {
     /// 同时做双名字替换：{hero}->f.heroName，{you}->sf.playerName（空则「你」）
     pub fn apply_pending(&mut self, fonts: &mut FontBook, style: &DialogStyle) {
         if let Some(text) = self.pending_text.take() {
-            let hero = {
-                let s = self.vars.get_or("f.heroName").as_str();
-                if s.is_empty() { "拓海".to_string() } else { s }
-            };
-            let you = {
-                let s = self.vars.get_or("sf.playerName").as_str();
-                if s.is_empty() { "你".to_string() } else { s }
-            };
-            let text = text.replace("{hero}", &hero).replace("{you}", &you);
+            let text = self.substitute_names(&text);
             if dbg() {
                 eprintln!("[dbg] line @{}:{} -> {:?}", self.file, self.pc, &text.chars().take(12).collect::<String>());
             }
@@ -244,15 +318,20 @@ impl Interp {
 
     /// 执行一条指令；返回 true=遇到等待点停止
     fn exec(&mut self, cmd: Command, ctx: &str) -> Result<bool, String> {
-        let unimpl = |name: &str| -> Result<bool, String> {
-            Err(format!("{ctx}：指令「{name}」尚未实现（A5/A6 里程碑）"))
-        };
+        let _ = ctx;
         match cmd {
             Command::Bg { storage, fade_ms } => {
                 self.stage.bg.set(Some(resolve("bg", &storage)), fade_ms);
                 Ok(false)
             }
-            Command::Bgm(_) | Command::Se(_) => Ok(false), // 接口预留：静默跳过（docs/20 §3.3）
+            Command::Bgm(name) => {
+                self.events.push(GameEvent::Bgm(name));
+                Ok(false)
+            }
+            Command::Se(name) => {
+                self.events.push(GameEvent::Se(name));
+                Ok(false)
+            }
             Command::Char { layer, storage } => {
                 let next = if storage == "hide" {
                     None
@@ -266,6 +345,17 @@ impl Interp {
                 let next = if storage == "hide" {
                     None
                 } else {
+                    // CG 鉴赏解锁（sf.cgs 逗号追加；隐藏 END 全收集数据源）
+                    let cur = self.vars.get_or("sf.cgs").as_str();
+                    if !cur.split(',').any(|s| s == &storage) {
+                        let joined = if cur.is_empty() {
+                            storage.clone()
+                        } else {
+                            format!("{cur},{storage}")
+                        };
+                        self.vars
+                            .set("sf.cgs", crate::script::vars::Value::Str(joined));
+                    }
                     Some(resolve("cg", &storage))
                 };
                 self.stage.cg.set(next, fade_ms);
@@ -346,14 +436,56 @@ impl Interp {
                 }));
                 Ok(true)
             }
-            Command::MetaFakeSave { .. }
-            | Command::MetaCorrupt(_)
-            | Command::MetaDeleteLast
-            | Command::TitleEvolve(_) => unimpl("meta_*"),
-            Command::Reach { .. }
-            | Command::WindowFxShake(_)
-            | Command::WindowFxTitle(_) => unimpl("reach/window_fx"),
-            Command::Shutdown(_) => unimpl("shutdown"),
+            Command::MetaFakeSave { date, time, image } => {
+                self.events.push(GameEvent::FakeSave { date, time, image });
+                Ok(false)
+            }
+            Command::MetaCorrupt(n) => {
+                self.events.push(GameEvent::Corrupt(n));
+                Ok(false)
+            }
+            Command::MetaDeleteLast => {
+                self.events.push(GameEvent::DeleteLast);
+                Ok(false)
+            }
+            Command::TitleEvolve(mode) => {
+                self.events.push(GameEvent::TitleEvolve(mode));
+                Ok(false)
+            }
+            Command::Reach { storage, dur_ms, scale } => {
+                self.events.push(GameEvent::Reach { storage, dur_ms, scale });
+                Ok(false)
+            }
+            Command::WindowFxShake(ms) => {
+                self.events.push(GameEvent::Shake(ms));
+                Ok(false)
+            }
+            Command::WindowFxTitle(t) => {
+                self.events.push(GameEvent::TitleFx(t));
+                Ok(false)
+            }
+            Command::Shutdown(secs) => {
+                self.events.push(GameEvent::Shutdown(secs));
+                Ok(false)
+            }
+            Command::DesktopWrite { file, content } => {
+                // 双名字替换（与台词一致）
+                let content = self.substitute_names(&content);
+                self.events.push(GameEvent::DesktopWrite { file, content });
+                Ok(false)
+            }
+            Command::DesktopOpen(file) => {
+                self.events.push(GameEvent::DesktopOpen(file));
+                Ok(false)
+            }
+            Command::ReachHide => {
+                self.events.push(GameEvent::ReachHide);
+                Ok(false)
+            }
+            Command::WindowFxTitleRestore => {
+                self.events.push(GameEvent::TitleRestore);
+                Ok(false)
+            }
         }
     }
 }

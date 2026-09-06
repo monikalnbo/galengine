@@ -1,9 +1,7 @@
-//! 渲染器：管理 1280x720 离屏游戏画面与 letterbox 呈现。
+//! 渲染层：1280x720 离屏游戏画面 + letterbox 呈现 + 越界层。
 //!
-//! 架构：每帧把游戏内容整体画进离屏纹理 `screen`（闭包内 1:1 逻辑坐标），
-//! 再按窗口尺寸以 16:9 letterbox 贴出（居中，四周黑边）。
-//! 越界层（reach，docs/20 §3.9）今后在贴出之后、present 之前
-//! 直接以窗口坐标绘制，可突破黑边——预留 draw_reach()。
+//! 两段式：`render_screen`（游戏内容画进离屏，闭包内 1:1 逻辑坐标）
+//! → `present`（letterbox 贴窗口，越界层 reach 直画窗口坐标突破黑边）。
 
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
@@ -11,6 +9,14 @@ use sdl2::render::{BlendMode, Canvas, Texture, TextureCreator};
 use sdl2::video::{Window, WindowContext};
 
 use crate::config::{LOGICAL_H, LOGICAL_W};
+
+/// 越界层绘制参数（reach，docs/20 §3.9）：图片放大伸出游戏区、画进黑边
+pub struct ReachDraw<'a, 't> {
+    pub tex: &'a mut Texture<'t>,
+    /// 0..1 动画进度（尺寸=窗口×scale×ease，透明度=ease）
+    pub progress: f32,
+    pub scale: f32,
+}
 
 pub struct Renderer<'a> {
     /// 游戏画面（整帧渲染目标，1280x720）
@@ -43,10 +49,23 @@ impl<'a> Renderer<'a> {
         (sx, sy)
     }
 
-    /// 渲染并呈现一帧：
-    /// 1. `draw_game` 闭包以 1:1 逻辑坐标画进离屏画面
-    /// 2. 离屏画面 letterbox 贴到窗口（窗口区刷黑作黑边）并 present
+    /// 渲染并呈现一帧（无越界层的便捷入口）
+    #[allow(dead_code)]
     pub fn present_frame<F>(
+        &mut self,
+        canvas: &mut Canvas<Window>,
+        clear: Color,
+        draw_game: F,
+    ) -> Result<(), String>
+    where
+        F: FnOnce(&mut Canvas<Window>) -> Result<(), String>,
+    {
+        self.render_screen(canvas, clear, draw_game)?;
+        self.present(canvas, None)
+    }
+
+    /// 第一步：游戏内容画进离屏画面（闭包内 1:1 逻辑坐标）
+    pub fn render_screen<F>(
         &mut self,
         canvas: &mut Canvas<Window>,
         clear: Color,
@@ -65,16 +84,34 @@ impl<'a> Renderer<'a> {
                 }
             })
             .map_err(|e| format!("离屏渲染失败：{e:?}"))?;
-
-        canvas.set_draw_color(Color::BLACK);
-        canvas.clear();
-        canvas.copy(&self.screen, None, Some(Self::letterbox(canvas)))?;
-        // 越界层 reach：此处预留（贴出之后、present 之前画窗口坐标）
-        canvas.present();
-
         if let Some(e) = game_err {
             return Err(e);
         }
+        Ok(())
+    }
+
+    /// 第二步：letterbox 贴到窗口（+越界层）并 present
+    pub fn present(
+        &self,
+        canvas: &mut Canvas<Window>,
+        reach: Option<ReachDraw<'_, '_>>,
+    ) -> Result<(), String> {
+        canvas.set_draw_color(Color::BLACK);
+        canvas.clear();
+        canvas.copy(&self.screen, None, Some(Self::letterbox(canvas)))?;
+        if let Some(r) = reach {
+            let (ww, wh) = canvas.output_size().unwrap_or((1280, 720));
+            let p = r.progress.clamp(0.0, 1.0);
+            let ease = p * p * (3.0 - 2.0 * p); // smoothstep
+            let w = ((ww as f32 * r.scale * ease) as u32).max(1);
+            let h = ((wh as f32 * r.scale * ease) as u32).max(1);
+            let x = (ww as i32 - w as i32) / 2;
+            let y = (wh as i32 - h as i32) / 2;
+            let a = if p >= 0.999 { 255 } else { (ease * 255.0) as u8 };
+            r.tex.set_alpha_mod(a);
+            let _ = canvas.copy(r.tex, None, Some(Rect::new(x, y, w, h)));
+        }
+        canvas.present();
         Ok(())
     }
 }

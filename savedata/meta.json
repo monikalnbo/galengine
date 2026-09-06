@@ -1,0 +1,19 @@
+{
+  "fake_save": {
+    "date": "7月7日",
+    "time": "23:59",
+    "thumb": "bgimage/bg_black.jpg"
+  },
+  "corrupted": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "title_stage": 0
+}

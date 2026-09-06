@@ -4,3 +4,8 @@ pub mod expr;
 pub mod interp;
 pub mod lexer;
 pub mod vars;
+
+#[cfg(test)]
+mod core_tests;
+#[cfg(test)]
+mod expr_tests;

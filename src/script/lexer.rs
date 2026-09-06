@@ -24,12 +24,17 @@ pub struct Line {
     pub kind: LineKind,
 }
 
+/// 剥 UTF-8 BOM（外部编辑器写入的文件可能带）
+fn strip_bom(s: &str) -> &str {
+    s.strip_prefix('\u{feff}').unwrap_or(s)
+}
+
 /// 解析整个剧本文件
 pub fn parse_script(src: &str) -> Result<Vec<Line>, String> {
     let mut out = Vec::new();
     let mut pending_choice: Option<(usize, String, Vec<(String, String)>)> = None;
 
-    for (i, raw) in src.lines().enumerate() {
+    for (i, raw) in strip_bom(src).lines().enumerate() {
         let no = i + 1;
         let line = raw.trim_end();
         let t = line.trim();
@@ -44,8 +49,8 @@ pub fn parse_script(src: &str) -> Result<Vec<Line>, String> {
                     no: no0,
                     kind: LineKind::Choice { prompt, items },
                 });
-            } else if let Some(rest) = t.strip_prefix("endchoice") {
-                return Err(format!("第 {no} 行 endchoice 后有多余内容"));
+            } else if let Some(extra) = t.strip_prefix("endchoice") {
+                return Err(format!("第 {no} 行 endchoice 后有多余内容：{extra}"));
             } else if let Some((_, _, items)) = pending_choice.as_mut() {
                 match t.split_once('|') {
                     Some((text, target)) if target.starts_with('*') => {

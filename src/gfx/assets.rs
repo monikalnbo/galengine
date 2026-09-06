@@ -66,6 +66,16 @@ impl<'a> TextureBank<'a> {
         Ok(())
     }
 
+    /// 取已加载纹理（未加载返回 None；不触发加载）
+    pub fn get(&self, path: &str) -> Option<&Texture<'a>> {
+        self.cache.get(path)
+    }
+
+    /// 取可变纹理（越界层 alpha 调制等）
+    pub fn get_mut(&mut self, path: &str) -> Option<&mut Texture<'a>> {
+        self.cache.get_mut(path)
+    }
+
     /// 整幅铺满，带透明度（crossfade 用）
     pub fn draw_full_alpha(
         &mut self,

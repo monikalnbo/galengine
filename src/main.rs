@@ -1,9 +1,15 @@
 //! 入口：组装并运行引擎。保持薄，具体逻辑在各模块。
 
 mod app;
+mod audio;
 mod config;
 mod gfx;
+mod input;
+mod platform;
+mod render;
+mod save;
 mod script;
+mod systems;
 mod text;
 mod ui;
 

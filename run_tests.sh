@@ -7,7 +7,7 @@ export ES_DEBUG=1
 export ES_DEBUG_AUTOCLICK_MS=600
 for s in a3_smoke.ks a4_main.ks a5_smoke.ks; do
   ok=$(xvfb-run -a -s "-screen 0 1280x800x24" bash -c \
-    "timeout 15 ./target/release/eighth-summer 2>&1 | grep -c ended" || true)
+    "timeout 15 ./target/release/galengine 2>&1 | grep -c ended" || true)
   echo "$s -> ended:$ok"
   [ "$ok" -ge 1 ] || { echo "FAIL: $s"; exit 1; }
 done

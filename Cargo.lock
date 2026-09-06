@@ -54,16 +54,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "eighth-summer"
-version = "0.1.0"
-dependencies = [
- "image",
- "sdl2",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "fdeflate"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -81,6 +71,16 @@ dependencies = [
  "crc32fast",
  "miniz_oxide 0.9.1",
  "zlib-rs",
+]
+
+[[package]]
+name = "galengine"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "sdl2",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
