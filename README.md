@@ -2,22 +2,8 @@
 
 《第八个夏天》自建 galgame 引擎（Rust + SDL2）。引擎独立仓库；游戏资产（剧本/美术/文档）在 `monikalnbo/eighth-summer`。
 
-## 架构（分层）
-
-```
-src/
-  main.rs        入口（薄）
-  config.rs      顶层总配置（data/config.json 唯一配置源，ES_DATA_DIR 可重定向数据目录）
-  app.rs         组装+主循环（事件按解释器状态分发）
-  gfx/           渲染层：renderer(letterbox+离屏) / assets(纹理库+场景回收) / stage(演出层crossfade) / prefetch(后台预解码缓存层)
-  text/          font(字体库+纹理缓存) / layout(中文断行禁则) / writer(打字机状态机)
-  script/        剧本语法体系：lexer / command(26条指令) / interp(状态机) / vars(f.* sf.*) / expr(表达式)
-  ui/            dialog(对话框) / choice(选项) / inputbox(名字输入)
-```
-
-- 逻辑分辨率 1280×720，窗口 letterbox 16:9 居中
-- 场景级资源管理：背景变更=切场景，回收图片/文字纹理；后台线程预解码消除卡帧
-- sf.* 全局变量退出即写盘（savedata/global.json）
+> **状态：源码已清空，等待按需求书重构**（历史实现在 git log 里可回溯）。
+> 唯一需求来源：[`docs/rebuild-spec.md`](docs/rebuild-spec.md)——功能清单/分层架构/剧本 DSL/验收标准/踩坑记录全部在内。
 
 ## 剧本语法
 
