@@ -50,8 +50,36 @@ pub fn eval(expr: &str, vars: &Vars) -> Result<Value, String> {
 
 /// if 条件求值（指令已拆为 var / op / val）
 pub fn eval_cond(var: &str, op: &str, val: &str, vars: &Vars) -> Result<bool, String> {
-    let (a, b) = (eval(var, vars)?, eval(val, vars)?);
+    // 左操作数为「未赋值的变量名」（裸名或 f./sf. 前缀的标识符，查无值）→ 按 0
+    // （裸名未赋值在 eval 里会被当作字符串字面量，这里显式纠正为数字 0）
+    let name = var.trim();
+    let is_ident = !name.is_empty()
+        && !name.contains(' ')
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.');
+    let a = match vars.get(name) {
+        Some(v) => v.clone(),
+        None if is_ident => Value::Int(0),
+        None => eval(var, vars)?,
+    };
+    let b = eval(val, vars)?;
     let bad = || format!("条件类型不可比较：{var} {op} {val}");
+    // 未赋值变量（空串）与数字比较：按 0 处理（剧本可省初始化；排练/直入路线不再崩溃）
+    let blank = |v: &Value| matches!(v, Value::Str(s) if s.is_empty());
+    if (blank(&a) || blank(&b))
+        && (!matches!(&a, Value::Str(_)) || blank(&a))
+        && (!matches!(&b, Value::Str(_)) || blank(&b))
+    {
+        let (x, y) = (if blank(&a) { 0.0 } else { a.as_f64() }, if blank(&b) { 0.0 } else { b.as_f64() });
+        return Ok(match op {
+            "==" => x == y,
+            "!=" => x != y,
+            ">=" => x >= y,
+            "<=" => x <= y,
+            ">" => x > y,
+            "<" => x < y,
+            _ => return Err(bad()),
+        });
+    }
     if matches!(&a, Value::Str(_)) || matches!(&b, Value::Str(_)) {
         return match op {
             "==" => Ok(a == b),
@@ -199,5 +227,24 @@ mod tests {
         assert!(eval_cond("sf.name", "==", "夏", &vars).unwrap());
         assert!(eval_cond("sf.name", "!=", "冬", &vars).unwrap());
         assert!(eval_cond("sf.name", ">", "1", &vars).is_err());
+    }
+
+    #[test]
+    fn 未赋值变量与数字比较按零() {
+        let vars = v();
+        // 未赋值（空串）vs 数字：按 0，不再报错（剧本可省初始化）
+        assert!(eval_cond("f.nothing", "<", "80", &vars).unwrap());
+        assert!(!eval_cond("f.nothing", ">=", "80", &vars).unwrap());
+        assert!(eval_cond("f.nothing", "==", "0", &vars).unwrap());
+        assert!(eval_cond("f.nothing", "!=", "1", &vars).unwrap());
+        // 两侧都是空串（均未赋值）：按 0 与 0 比较
+        assert!(eval_cond("f.nothing", "==", "f.blank", &vars).unwrap());
+        assert!(!eval_cond("f.nothing", ">", "f.blank", &vars).unwrap());
+        // 非空字符串 vs 任意字符串仍禁用大小比较
+        assert!(eval_cond("sf.name", ">", "f.blank", &vars).is_err());
+        // 裸名未赋值（会被 eval 当字符串字面量）：条件左值按 0
+        assert!(eval_cond("nope", "<", "80", &vars).unwrap());
+        assert!(!eval_cond("nope", ">=", "1", &vars).unwrap());
+        assert!(eval_cond("nope", "==", "0", &vars).unwrap());
     }
 }

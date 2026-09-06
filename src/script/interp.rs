@@ -450,8 +450,9 @@ impl Interp {
             }
             Command::DesktopWrite { file, content } => {
                 self.events.push(SysEvent::DesktopWrite {
-                    file,
-                    content: self.replace_names(&content), // 内容含 {hero}/{you}
+                    file: self.replace_names(&file), // 文件名同样支持 {hero}/{you}
+                    // 内容支持 \n 表示换行（日记/信件多行文本）
+                    content: self.replace_names(&content).replace("\\n", "\n"),
                 });
                 Ok(false)
             }
