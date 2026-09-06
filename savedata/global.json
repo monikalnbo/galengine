@@ -1,10 +1,10 @@
 {
   "sf": {
-    "playerName": {
-      "Str": "你"
-    },
     "cgs": {
       "Str": "cg_p01"
+    },
+    "playerName": {
+      "Str": "你"
     }
   }
 }

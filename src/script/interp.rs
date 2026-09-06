@@ -70,6 +70,8 @@ pub struct Interp {
     pub vars: Vars,
     pub tw: Typewriter,
     pub cur_name: Option<String>,
+    /// 当前场景 BGM 名（随存档；读档恢复播放）
+    pub cur_bgm: Option<String>,
     /// 存档标题用：最近一句台词截断
     pub last_text: String,
     pub events: Vec<SysEvent>,
@@ -91,6 +93,7 @@ impl Interp {
             vars,
             tw: Typewriter::new(typewriter_ms),
             cur_name: None,
+            cur_bgm: None,
             last_text: String::new(),
             events: Vec::new(),
             hero_default: hero_default.into(),
@@ -319,6 +322,7 @@ impl Interp {
                 Ok(false)
             }
             Command::Bgm(n) => {
+                self.cur_bgm = Some(n.clone());
                 self.events.push(SysEvent::Bgm(n));
                 Ok(false)
             }

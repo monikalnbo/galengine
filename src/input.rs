@@ -77,6 +77,8 @@ fn key_down(
         Keycode::Escape => {
             if g.sys.rest.is_some() {
                 g.cancel_rest();
+            } else if matches!(g.overlay, Overlay::Title { .. }) {
+                // 标题必须选一项进入，Esc 不动作（否则未开局黑屏）
             } else if g.overlay.active() {
                 g.overlay = Overlay::None;
             } else {
@@ -481,6 +483,7 @@ fn do_save(
         line,
         fvars: g.interp.vars.f.clone(),
         snap: g.interp.stage.snapshot(),
+        bgm: g.interp.cur_bgm.clone(),
         thumb: crate::save::slots::thumb_png(&rgba, config::LOGICAL_W, config::LOGICAL_H),
     };
     crate::save::slots::save(&g.sys.save_dir, &entry)?;
@@ -498,6 +501,12 @@ fn do_load(g: &mut Game, slot: usize) {
             let res = g.interp.restore(&e.file, e.line, e.snap, e.fvars);
             match res {
                 Ok(()) => {
+                    // BGM 随档恢复：场景音乐回到存档时刻（有则播，无则停）
+                    match &e.bgm {
+                        Some(name) => g.sys.audio.play_bgm(name),
+                        None => g.sys.audio.stop_bgm(),
+                    }
+                    g.interp.cur_bgm = e.bgm.clone();
                     g.overlay = Overlay::None;
                     g.auto = false;
                     g.started = true; // 从标题快读也直接开局
@@ -590,12 +599,21 @@ mod sdl_tests {
     use crate::config;
     use crate::script::interp::Interp;
 
-    /// 存→读 全链路（SDL dummy 驱动，无窗口）：缩略图/指纹/演出层快照/变量恢复
+    /// 存→读 全链路（SDL dummy 驱动，无窗口）：缩略图/指纹/演出层快照/变量/BGM 恢复
     #[test]
     fn 存读档端到端() {
         std::env::set_var("SDL_VIDEODRIVER", "dummy");
         std::env::set_var("SDL_AUDIODRIVER", "dummy");
-        std::env::set_var("ES_DATA_DIR", "testdata/game/data");
+        // 副本数据 + 带 bgm 的剧本：BGM 随档恢复验证（不碰正式 testdata）
+        let data = std::env::temp_dir().join("galengine_e2e_data");
+        let _ = std::fs::remove_dir_all(&data);
+        fs_extra_copy("testdata/game/data", &data);
+        std::fs::write(
+            data.join("scenario/bgmtest.ks"),
+            "bg bg_black 100\nbgm theme_test\nn BGM 场景测试。\nn 第二句。\nend\n",
+        )
+        .unwrap();
+        std::env::set_var("ES_DATA_DIR", data.to_str().unwrap());
 
         let sdl = sdl2::init().unwrap();
         let video = sdl.video().unwrap();
@@ -612,10 +630,10 @@ mod sdl_tests {
             &conf.game.hero_default,
             &conf.game.you_default,
         );
-        interp.start("a3_smoke.ks", None).unwrap();
-        // 走两句台词并设个 f.* 变量，让快照非平凡
-        interp.click().unwrap(); // 补全
-        interp.click().unwrap(); // 行完 → 下一句
+        interp.start("bgmtest.ks", None).unwrap();
+        // 首句等待点即可存档（bgm 已随场景指令生效）
+        assert_eq!(interp.state, RunState::WaitClick);
+        assert_eq!(interp.cur_bgm.as_deref(), Some("theme_test"));
         interp.vars.set("f.probe", Value::Int(7));
         let mut g = Game::new(conf, interp);
 
@@ -625,17 +643,21 @@ mod sdl_tests {
 
         renderer.compose(&mut canvas, 0, 0, |_| Ok(())).unwrap();
         do_save(&mut g, &mut renderer, &mut canvas, &mut thumbs, 1).unwrap();
-        assert!(crate::save::slots::load(&g.sys.save_dir, 1).is_some());
+        let saved = crate::save::slots::load(&g.sys.save_dir, 1).expect("do_save 后应有档");
+        assert_eq!(saved.bgm.as_deref(), Some("theme_test"));
 
-        // 推进几句台词并污染 f.*，验证读回时位置与变量都恢复
+        // 推进烧完剧本（dummy 环境无 apply_pending，点击即快进）+ 污染 f.*
         for _ in 0..8 {
-            let _ = g.interp.tw.click(); // 补全/翻页，让行完可推进
-            g.interp.click().unwrap();
+            let _ = g.interp.click();
         }
+        assert_eq!(g.interp.state, RunState::Ended);
         g.interp.vars.set("f.probe", Value::Int(99));
+        g.interp.cur_bgm = None;
         do_load(&mut g, 1);
         assert_eq!(g.interp.vars.get_or("f.probe"), Value::Int(7));
         assert_eq!(g.interp.state, RunState::WaitClick);
+        // BGM 随档恢复（dummy 声卡静音降级，但状态必须回位）
+        assert_eq!(g.interp.cur_bgm.as_deref(), Some("theme_test"));
 
         // 缩略图缓存构建 + meta 不明档
         g.sys.meta.fake_saves.push(crate::save::meta::FakeSave {
@@ -649,11 +671,17 @@ mod sdl_tests {
         assert!(thumbs.get("f0").is_some());
     }
 
-    impl Interp {
-        /// 测试辅助：连续推进直到下一个等待点稳定
-        fn tick_check(&mut self) -> RunState {
-            self.tick(16.0);
-            self.state.clone()
+    /// 递归拷贝目录（测试用，避免引依赖）
+    fn fs_extra_copy(src: &str, dst: &std::path::Path) {
+        std::fs::create_dir_all(dst).unwrap();
+        for e in std::fs::read_dir(src).unwrap().flatten() {
+            let from = e.path();
+            let to = dst.join(e.file_name());
+            if from.is_dir() {
+                fs_extra_copy(from.to_str().unwrap(), &to);
+            } else {
+                std::fs::copy(from, to).unwrap();
+            }
         }
     }
 }

@@ -22,6 +22,9 @@ pub struct SaveEntry {
     pub line: usize,
     pub fvars: HashMap<String, Value>,
     pub snap: StageSnap,
+    /// 存档时刻的 BGM 名（读档恢复播放；旧档无此字段=None 不播）
+    #[serde(default)]
+    pub bgm: Option<String>,
     /// 剧本文件内容指纹（读档校验）
     pub fingerprint: u64,
     /// 缩略图 PNG（320×180）
@@ -157,6 +160,7 @@ mod tests {
             line: 3,
             fvars: HashMap::from([("aff".into(), Value::Int(2))]),
             snap: StageSnap::default(),
+            bgm: Some("theme_test".into()),
             fingerprint: 42,
             thumb: vec![1, 2, 3],
         }
@@ -176,6 +180,18 @@ mod tests {
         assert_eq!(e.title, "夏夜测试");
         assert_eq!(e.fvars["aff"], Value::Int(2));
         assert_eq!(e.thumb, vec![1, 2, 3]);
+        assert_eq!(e.bgm.as_deref(), Some("theme_test"));
+    }
+
+    #[test]
+    fn 旧档无bgm字段兼容() {
+        let dir = tmpdir("old");
+        std::fs::create_dir_all(&dir).unwrap();
+        // 旧版格式：无 bgm 字段
+        let json = r#"{"slot":1,"title":"旧档","stamp":"t","file":"a.ks","line":1,"fvars":{},"snap":{"bg":null,"chars":[null,null,null],"cg":null},"fingerprint":1,"thumb":[]}"#;
+        std::fs::write(format!("{dir}/save1.json"), json).unwrap();
+        let e = load(&dir, 1).expect("旧档应可解析");
+        assert_eq!(e.bgm, None);
     }
 
     #[test]

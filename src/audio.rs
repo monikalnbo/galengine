@@ -54,6 +54,13 @@ impl Audio {
         } // 缺文件静默（规格）
     }
 
+    pub fn stop_bgm(&mut self) {
+        if self.ok {
+            sdl2::mixer::Music::halt();
+        }
+        self.music = None;
+    }
+
     pub fn play_se(&mut self, name: &str) {
         if !self.ok {
             return;

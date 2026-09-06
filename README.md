@@ -51,6 +51,5 @@ ES_DATA_DIR=testdata/game/data ES_SCRIPT=a6_smoke.ks ES_DEBUG=1 ES_DEBUG_AUTOCLI
 ## 已知简化（ponytail）
 
 - 存档指纹用 DefaultHasher：同版本引擎内稳定，跨版本升级存档会拒读（重打一局）
-- BGM 不入存档快照：读档后不恢复音乐（KAG 亦如此）
 - 存档时间戳为 UTC
 - kslint 静态检查（label/变量/资源存在性）未建；Windows 真机（IME/DPI/关机）待回归
