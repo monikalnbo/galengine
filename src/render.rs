@@ -121,7 +121,7 @@ fn draw_overlay(
             menu::draw(tc, fonts, &esc_items(), *sel, 250, true)?;
         }
         Overlay::Title { sel, .. } => {
-            title::draw(tc, fonts, &g.conf, &g.sys.meta.title_evolve, *sel, g.now_ms)?;
+            title::draw(tc, fonts, bank, &g.conf, &g.sys.meta.title_evolve, *sel, g.now_ms)?;
         }
         Overlay::Save { mode_save, sel } => {
             savemenu::draw(

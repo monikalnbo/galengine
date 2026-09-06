@@ -3,6 +3,8 @@
 通用 galgame 引擎（Rust + SDL2，单二进制 <10MB）。换游戏=换 `data/` 目录+`config.json`，引擎代码零改动；引擎仓与游戏仓分离（首个客户：《第八个夏天》）。
 
 > 唯一需求来源：[`docs/rebuild-spec.md`](docs/rebuild-spec.md)。
+> 创作者手册：[`docs/game-authoring.md`](docs/game-authoring.md)（目录契约/26 条 DSL/配置/开发循环/发布）
+> 错题本：[`docs/mistakes.md`](docs/mistakes.md)（引擎/API/验收/测试/流程 五类，含防复发规则）
 > 2026-09 按需求书从零重构完成（旧实现 git log 可回溯）。
 
 ## 分层（只准向下依赖）

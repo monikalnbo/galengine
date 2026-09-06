@@ -126,6 +126,9 @@ pub fn run() -> Result<(), String> {
             if let Some(r) = &g.sys.reach {
                 keep.insert(r.path.clone());
             }
+            if let Some(t) = crate::ui::title::bg_path() {
+                keep.insert(t); // 标题背景常驻（回标题不再重加载）
+            }
             bank.retain(&keep);
             fonts.clear_text_cache();
             if crate::script::interp::dbg() {
