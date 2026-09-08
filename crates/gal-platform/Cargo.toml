@@ -1,0 +1,6 @@
+[package]
+name = "gal-platform"
+description = "galgame 引擎·平台层：关机/桌面文件/URL 等系统能力"
+version.workspace = true
+edition.workspace = true
+license.workspace = true

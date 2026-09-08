@@ -1,0 +1,12 @@
+[package]
+name = "gal-save"
+description = "galgame 引擎·存档层：槽位/指纹/缩略图/meta"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+image.workspace = true
+gal-script.workspace = true

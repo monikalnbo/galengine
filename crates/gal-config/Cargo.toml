@@ -1,0 +1,10 @@
+[package]
+name = "gal-config"
+description = "galgame 引擎·配置层：game.yaml → 强类型 Config（纯数据，零 SDL）"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_yaml.workspace = true

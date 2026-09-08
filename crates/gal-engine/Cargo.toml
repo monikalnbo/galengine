@@ -1,0 +1,23 @@
+[package]
+name = "gal-engine"
+description = "galgame 引擎·组装门面：主循环/输入路由/系统事件 + run_with(Boot)；游戏只依赖本 crate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sdl2.workspace = true
+serde_json.workspace = true
+gal-config.workspace = true
+gal-platform.workspace = true
+gal-text.workspace = true
+gal-script.workspace = true
+gal-audio.workspace = true
+gal-save.workspace = true
+gal-ext.workspace = true
+gal-render.workspace = true
+gal-ui.workspace = true
+
+[[bin]]
+name = "galengine"
+path = "src/main.rs"

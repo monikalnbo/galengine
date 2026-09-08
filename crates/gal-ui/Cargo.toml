@@ -1,0 +1,16 @@
+[package]
+name = "gal-ui"
+description = "galgame 引擎·界面层：对话框/选项/菜单/设置/标题/图层叠加等部件"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sdl2.workspace = true
+image.workspace = true
+gal-config.workspace = true
+gal-script.workspace = true
+gal-text.workspace = true
+gal-render.workspace = true
+gal-platform.workspace = true
+gal-save.workspace = true

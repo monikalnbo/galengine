@@ -1,0 +1,12 @@
+[package]
+name = "gal-script"
+description = "galgame 引擎·剧本层：DSL 词法/指令/表达式/解释器/演出层状态"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gal-config.workspace = true
+gal-text.workspace = true
+serde.workspace = true
+serde_json.workspace = true

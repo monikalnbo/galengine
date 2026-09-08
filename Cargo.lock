@@ -54,6 +54,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "equivalent"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+
+[[package]]
 name = "fdeflate"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -74,14 +80,107 @@ dependencies = [
 ]
 
 [[package]]
-name = "galengine"
-version = "0.1.0"
+name = "gal-audio"
+version = "0.2.1"
 dependencies = [
+ "gal-config",
+ "sdl2",
+]
+
+[[package]]
+name = "gal-config"
+version = "0.2.1"
+dependencies = [
+ "serde",
+ "serde_yaml",
+]
+
+[[package]]
+name = "gal-engine"
+version = "0.2.1"
+dependencies = [
+ "gal-audio",
+ "gal-config",
+ "gal-ext",
+ "gal-platform",
+ "gal-render",
+ "gal-save",
+ "gal-script",
+ "gal-text",
+ "gal-ui",
+ "sdl2",
+ "serde_json",
+]
+
+[[package]]
+name = "gal-ext"
+version = "0.2.1"
+dependencies = [
+ "gal-script",
+ "gal-text",
+ "sdl2",
+]
+
+[[package]]
+name = "gal-platform"
+version = "0.2.1"
+
+[[package]]
+name = "gal-render"
+version = "0.2.1"
+dependencies = [
+ "gal-config",
+ "gal-script",
  "image",
  "sdl2",
+]
+
+[[package]]
+name = "gal-save"
+version = "0.2.1"
+dependencies = [
+ "gal-script",
+ "image",
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "gal-script"
+version = "0.2.1"
+dependencies = [
+ "gal-config",
+ "gal-text",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "gal-text"
+version = "0.2.1"
+dependencies = [
+ "sdl2",
+]
+
+[[package]]
+name = "gal-ui"
+version = "0.2.1"
+dependencies = [
+ "gal-config",
+ "gal-platform",
+ "gal-render",
+ "gal-save",
+ "gal-script",
+ "gal-text",
+ "image",
+ "sdl2",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
 name = "image"
@@ -96,6 +195,16 @@ dependencies = [
  "png",
  "zune-core",
  "zune-jpeg",
+]
+
+[[package]]
+name = "indexmap"
+version = "2.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
+dependencies = [
+ "equivalent",
+ "hashbrown",
 ]
 
 [[package]]
@@ -199,6 +308,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ryu"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
+
+[[package]]
 name = "sdl2"
 version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -265,6 +380,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_yaml"
+version = "0.9.34+deprecated"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
+dependencies = [
+ "indexmap",
+ "itoa",
+ "ryu",
+ "serde",
+ "unsafe-libyaml",
+]
+
+[[package]]
 name = "simd-adler32"
 version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -286,6 +414,12 @@ name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+
+[[package]]
+name = "unsafe-libyaml"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 
 [[package]]
 name = "version-compare"

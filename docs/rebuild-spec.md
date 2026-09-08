@@ -1,4 +1,4 @@
-# galengine 重构需求书 v1.0
+# galengine 重构需求书 v1.1
 
 > 本文是引擎的唯一需求来源与设计记录。
 
@@ -6,30 +6,32 @@
 
 ## 0. 项目定位（拍板，不可改）
 
-- **通用 galgame 引擎**，单二进制，服务多部游戏。换游戏=换 `data/` 目录+`config.json`，引擎代码零改动
+- **通用 galgame 引擎**，单二进制，服务多部游戏。换游戏=换 `data/` 目录+`game.yaml`，引擎代码零改动
 - 技术栈：**Rust + SDL2**（用户指定；Windows 玩家双击 exe，体积 <10MB）
 - 游戏内容（角色名颜色/预设名/文案/立绘/剧本）**只存在于数据侧**，引擎里禁止出现任何游戏特定字符串
 - 引擎仓（本仓）与游戏仓分离；引擎自带 `testdata/` 自包含可测
 
-## 1. 分层架构（用户拍板：每功能一模块，文件百行量级）
+## 1. 分层架构（用户拍板：每功能一模块，文件百行量级；workspace 10 crate）
 
 ```
-L1  app.rs        主循环+系统键路由（保持薄）
-    input.rs      游戏输入路由（choice/input/台词三态）
-    render.rs     一帧渲染组装
-    systems.rs    系统动作（存读档执行/演出事件/越界/抖动）
-L2  script/       剧本语法体系：lexer / command(全指令枚举) / interp(状态机) / expr(表达式) / vars(f.* sf.*)
-    ui/           theme(配色字号) / geom(纯几何) / widgets(面板/按钮/滑条/文本原语) / overlay(覆盖层状态机)
-                  + dialog / choice / inputbox / title / menu / savemenu / gallery / volume / ritual / restui
-L3  gfx/          renderer(1280x720离屏+letterbox+越界层) / stage(演出层crossfade) / assets(纹理库) / prefetch(后台解码)
-    text/         font(字体库+纹理缓存) / layout(中文断行禁则) / writer(打字机)
-    audio/        SDL2_mixer 封装（无声卡降级静音）
-    save/         slots(存档槽+指纹) / meta(meta状态持久化)
-L4  platform.rs   关机/桌面文件（Windows真执行，验收环境仅日志）
-    config.rs     顶层唯一配置（data/config.json）
+L1  gal-engine crate    组装门面：app(主循环) / input(路由：choice/input/台词三态) /
+                       frame(帧组装) / systems(系统动作) / exts(拓展注册)
+L2  gal-script crate    lexer / command(全指令枚举) / interp(状态机) / expr / vars(f.* sf.*) / stage
+    gal-ui crate        dialog / choice / inputbox / title / menu / savemenu / gallery /
+                       settings / bottombar / layers(图层叠加) / cursor(两态鼠标) /
+                       overlay(覆盖层状态机) / ritual / restui
+L3  gal-render crate    renderer(1280×720离屏+letterbox+越界层) / stage_draw(crossfade) /
+                       assets(纹理库) / prefetch(后台解码) / blur(虚化) / grade(降饱和)
+    gal-text crate      font(字体库+纹理缓存) / layout(中文断行禁则) / writer(打字机)
+    gal-audio crate     SDL2_mixer 封装（无声卡降级静音）
+    gal-save crate      slots(存档槽+指纹) / meta(meta状态持久化)
+L4  gal-config crate    顶层唯一配置（data/game.yaml）
+    gal-platform crate  关机/桌面文件（Windows真执行，验收环境仅日志）
+    gal-ext crate       Extension 契约（tick/draw/on_key/on_click）+ timer_choice 参考实现
 ```
 
 规则：只准向下依赖；L2 不碰 SDL 事件泵；L3 互相独立；所有报错中文（含剧本文件:行号）。
+游戏只依赖 gal-engine 一个 crate（`run_with(Boot)`）。
 
 ## 2. 功能需求清单（全部必须有）
 
@@ -41,8 +43,8 @@ L4  platform.rs   关机/桌面文件（Windows真执行，验收环境仅日志
 
 ### 2.2 剧本 DSL（自有语法生态，26+条指令）
 ```
-bg 素材 [ms]          char 0-2 素材|hide     cg 素材 [ms] / cg hide
-bgm 名 / se 名（缺文件静默）                clear   wait ms(不可跳过)
+bg 素材 [ms]          char 0-2 素材|hide [x y|位置名]    cg 素材 [ms] / cg hide
+bgm 名 / bgm stop / bgm fadeout ms / se 名（缺文件静默）   clear   wait ms(不可跳过)
 n 旁白                name 名字 台词
 flag 变量 +2|-1       set 变量 = 表达式(?? + - * / 引号字符串)
 jump [*文件] *label   if 变量 == 值 *label（== != >= <= > <）
@@ -54,8 +56,8 @@ window_fx shake ms / window_fx title 文字 / window_fx title restore
 shutdown [秒]        desktop_write 文件|内容    desktop_open 文件
 end
 ```
-- `{hero}`→f.heroName、`{you}`→sf.playerName 运行时替换（含 desktop_write 内容）
-- 变量：f.* 随存档；sf.* 存 `savedata/global.json` **退出即写盘**
+- `{hero}`→f.heroName、`{you}`→sf.playerName 运行时替换（台词/desktop_write/window_fx title）
+- 变量：f.* 随存档；sf.* 存 `savedata/global.json` **退出即写盘**；未赋值变量数值比较按 0（免疫崩溃）
 - UTF-8 全链路（读取层剥 BOM）
 
 ### 2.3 交互
@@ -78,13 +80,15 @@ end
 - desktop_write/open：向玩家桌面写/打开文本文件（文件名防路径穿越）
 - window_fx：窗口抖动/改标题/恢复
 
-## 3. 配置（data/config.json 唯一配置源）
-title / script_start / save_dir / save_slots / fonts[]（候选链：随包→Linux Noto→Windows msyh→子集）/ dialog 几何字号 / typewriter_ms / auto_delay_ms / audio 音量 / game{hero_default, you_default, input_presets, name_colors, shutdown_message, ritual_texts}
+## 3. 配置（data/game.yaml 唯一配置源）
+meta{title,version,script_start,donation_*} / display{窗口,letterbox,bg_saturation} / ui{dialog 几何字号,choice,bottombar,title,menu,input,cursor 两态鼠标,button,layers 图层叠加} / sprites{layers,default_fade_ms,positions 预设位置,chibi Q版名单} / audio{音量,目录,fade_ms} / fonts[]（候选链：随包→Linux Noto→Windows msyh） / save{dir,slots,auto_save_ms} / auto{delay_ms} / game{hero_default,you_default,input_presets,name_colors,shutdown_message,ritual_texts,skip_read_only,menu_items,title_items} / extensions[]{name,拓展自解释字段}
+缺失字段自动回退内置默认（零配置可跑）；全字段示例见创作手册 §5。
 
 ## 4. 验收标准（每步完成必须过）
 1. `run_tests.sh`：xvfb 三剧本回归（a3 演出链/a4 跨文件/a5 分支输入）全 ended
 2. 关键帧 ffmpeg x11grab 截图 + VLM 判读（VLM 是眼睛不是法官，关键结论 PIL 像素交叉验证）
-3. `cargo test` 纯逻辑单测（expr/lexer/vars/slots）
+3. `cargo test --workspace` 纯逻辑单测 + SDL dummy 驱动 E2E（expr/lexer/vars/slots/…）
+4. CI（fmt --check + clippy -D warnings + 全量编译测试）；打 tag 交叉出包
 4. 验收辅助环境变量：ES_SCRIPT / ES_START_LABEL / ES_DATA_DIR / ES_DEBUG / ES_DEBUG_AUTOCLICK_MS
 5. 通过才 commit+push；**永不覆盖正式文件**（测试走副本）
 

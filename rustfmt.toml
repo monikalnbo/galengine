@@ -1,0 +1,3 @@
+# galengine 代码风格：默认规则 + 紧凑数组字面量
+edition = "2021"
+use_small_heuristics = "Max"

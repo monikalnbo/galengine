@@ -1,0 +1,46 @@
+# 演示配置 —— game.yaml 是唯一配置入口（config.json 已废除）
+# 只写想覆盖默认值的字段，其余自动回退内置默认（零配置也能跑）
+
+meta:
+  title: GALENGINE DEMO
+  script_start: a3_smoke.ks
+
+game:
+  hero_default: 阿岚
+  input_presets:
+    hero: [阿岚, 小舟, 阿远]
+    player: [你, 读者, 旅行者]
+  # 名字牌配色（缺省白）
+  name_colors:
+    澪: [150, 214, 255]
+    时雨: [186, 164, 255]
+    千岁: [255, 196, 96]
+    夏乃: [255, 168, 64]
+
+ui:
+  dialog:
+    box_rect: [56, 514, 1168, 172]
+    text_x: 104
+    text_y: 542
+    font_size: 30
+    name_font_size: 30
+    lines_per_page: 3
+    typewriter_ms: 30
+  # 对话框底功能条（自动/快进/存档/读档/设置）
+  bottombar:
+    enabled: true
+
+sprites:
+  layers: 3
+  default_fade_ms: 500
+
+audio:
+  bgm_volume: 80
+  se_volume: 90
+
+auto:
+  delay_ms: 1000
+
+save:
+  dir: savedata
+  slots: 9
