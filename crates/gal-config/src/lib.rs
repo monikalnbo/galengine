@@ -120,5 +120,7 @@ pub fn load() -> Config {
     }
 
     eprintln!("[config] 无配置文件，使用内置默认值");
-    Config::default()
+    // 零配置也必须有字体链（Config::default 的 fonts 是空 vec，
+    // 否则零配置启动直接「找不到可用中文字体」——错题本 #A13）
+    Config { fonts: default_fonts(), ..Config::default() }
 }
