@@ -10,6 +10,11 @@ use gal_ui::savemenu::ThumbCache;
 
 #[test]
 fn 存读档端到端() {
+    // 纯净仓不含示例数据：无 testdata 时自动跳过（示例见 docs/game-authoring.md）
+    if !std::path::Path::new("testdata/game/data").exists() {
+        eprintln!("跳过：testdata/game/data 不存在");
+        return;
+    }
     std::env::set_var("SDL_VIDEODRIVER", "dummy");
     std::env::set_var("SDL_AUDIODRIVER", "dummy");
     // 副本数据 + 带 bgm 的剧本：BGM 随档恢复验证（不碰正式 testdata）
