@@ -47,7 +47,7 @@ if aff_shigure >= 3 *shigure_route
 git clone https://github.com/monikalnbo/galengine
 cd galengine
 cargo build --release
-ES_DATA_DIR=crates/gal-engine/testdata/game/data ./target/release/galengine   # 跑自带演示数据
+ES_DATA_DIR=<你的数据目录> ./target/release/galengine   # 目录契约与写法见 docs/game-authoring.md
 ```
 
 操作：点击/空格推进｜↑↓+回车或鼠标选项｜A 自动模式｜按住 Ctrl 快进｜Esc 菜单｜F9/F10 快存读｜F5-F8 音量。
