@@ -70,7 +70,84 @@ jobs:
             cp -r crates/gal-engine/testdata/game/data dist/game/data
             rm -rf dist/game/data/savedata
           else
-            mkdir -p dist/game/data
+            mkdir -p dist/game/data/scenario dist/game/data/bg dist/game/data/char dist/game/data/cg dist/game/data/bgm dist/game/data/sound
+            cat << 'EOF' > dist/game/data/game.yaml
+meta:
+  title: "我的第一部视觉小说"
+  version: "1.0.0"
+  script_start: "start.ks"
+
+display:
+  window_title: "我的第一部视觉小说"
+  width: 1280
+  height: 720
+  resizable: true
+
+ui:
+  dialog:
+    box_rect: [64, 480, 1152, 200]
+    font_size: 26
+    name_font_size: 24
+
+sprites:
+  layers: 3
+  positions:
+    left: { x: 0, y: 0 }
+    center: { x: 320, y: 0 }
+    right: { x: 640, y: 0 }
+EOF
+            cat << 'EOF' > dist/game/data/scenario/start.ks
+# 开场起始剧本
+n 欢迎使用 galengine 视觉小说引擎！
+n 这是一个开箱即用的新手示范剧本。
+n 引擎代码零改动，修改 game/data/ 目录下的资源和剧本即可创造属于你的世界。
+
+choice 你接下来想了解什么？
+  「查看剧本核心语法」|*syntax
+  「了解创作工作流」|*workflow
+  「开始自由创作」|*author
+endchoice
+
+*syntax
+name 引擎小助手 剧本采用简明易读的 DSL：
+name 引擎小助手 - bg 素材 [淡入ms]：切换背景
+name 引擎小助手 - char 0-2 素材 [位置]：立绘登场
+name 引擎小助手 - choice ... endchoice：分支选项
+name 引擎小助手 - set / if：变量与好感度分支
+jump *finish
+
+*workflow
+name 引擎小助手 创作只需 3 步：
+name 引擎小助手 1. 把背景放进 game/data/bg/，立绘放进 game/data/char/
+name 引擎小助手 2. 用记事本或 VSCode 编辑 game/data/scenario/start.ks
+name 引擎小助手 3. 双击 galengine.exe 立即看效果！
+jump *finish
+
+*author
+name 引擎小助手 祝你的故事创作顺利，打动每一位玩家！
+jump *finish
+
+*finish
+n 详细创作教程与 26 条指令说明见 GitHub 仓库的 docs/game-authoring.md。
+end
+EOF
+            cat << 'EOF' > dist/使用说明.txt
+【galengine 视觉小说引擎使用说明】
+
+双击运行 galengine.exe 即可直接启动游戏。
+
+游戏所有内容均存放在 game/data/ 目录下，即改即生效，无需编译：
+- game/data/game.yaml        : 游戏配置文件（标题、窗口尺寸、立绘位置等）
+- game/data/scenario/start.ks: 起始剧本文件（纯文本，任意文本编辑器均可编辑）
+- game/data/bg/             : 背景图片目录（1280x720，jpg/png）
+- game/data/char/           : 人物立绘目录（png）
+- game/data/cg/             : CG 插画目录（jpg/png）
+- game/data/bgm/            : 背景音乐目录（ogg/mp3/wav）
+- game/data/sound/          : 音效目录（ogg/mp3/wav）
+
+详细创作手册与完整语法请查阅 GitHub 仓库的 docs/game-authoring.md：
+https://github.com/monikalnbo/galengine/blob/main/docs/game-authoring.md
+EOF
           fi
           cd dist && 7z a -tzip "../galengine-demo-windows-x64-${VER}.zip" .
 
