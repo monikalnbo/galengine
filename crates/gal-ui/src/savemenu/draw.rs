@@ -1,88 +1,20 @@
-//! 存档/读档界面：3×3 槽位网格（缩略图+时间戳+场景标题），
-//! meta 不明存档（不可读）与破損标记同屏展示。
+//! 存档/读档界面绘制
 
-use std::collections::HashMap;
-
-use sdl2::image::LoadTexture;
-use sdl2::pixels::{Color, PixelFormatEnum};
+use sdl2::pixels::Color;
 use sdl2::rect::Rect;
-use sdl2::render::{BlendMode, Canvas, Texture, TextureCreator};
-use sdl2::video::{Window, WindowContext};
+use sdl2::render::{BlendMode, Canvas};
+use sdl2::video::Window;
 
-use crate::inputbox::button;
+use super::cache::ThumbCache;
+use super::cell_rect;
+use crate::widgets::button;
 use gal_config::LOGICAL_W;
 use gal_save::meta::FakeSave;
 use gal_save::slots::SaveEntry;
 use gal_text::font::FontBook;
 
-const CELL_W: u32 = 360;
-const CELL_H: u32 = 150;
-const GAP: i32 = 24;
-const COLS: usize = 3;
-const TOP_Y: i32 = 130;
 const FONT: u16 = 22;
 const BIG: u16 = 30;
-
-/// 槽位/不明档 布局矩形（idx ≥ slots 为不明档，追加一行展示）
-pub fn cell_rect(idx: usize) -> Rect {
-    let row = idx / COLS;
-    let col = idx % COLS;
-    let total_w = COLS as i32 * CELL_W as i32 + (COLS as i32 - 1) * GAP;
-    let x0 = (LOGICAL_W as i32 - total_w) / 2;
-    Rect::new(
-        x0 + col as i32 * (CELL_W as i32 + GAP),
-        TOP_Y + row as i32 * (CELL_H as i32 + GAP),
-        CELL_W,
-        CELL_H,
-    )
-}
-
-pub fn hit_test(n: usize, x: f32, y: f32) -> Option<usize> {
-    (0..n).find(|&i| cell_rect(i).contains_point((x as i32, y as i32)))
-}
-
-/// 缩略图纹理缓存（开档界面时构建一次）
-pub struct ThumbCache<'a> {
-    creator: &'a TextureCreator<WindowContext>,
-    map: HashMap<String, Texture<'a>>,
-}
-
-impl<'a> ThumbCache<'a> {
-    pub fn new(creator: &'a TextureCreator<WindowContext>) -> Self {
-        Self { creator, map: HashMap::new() }
-    }
-
-    /// entries: (槽号, 内容)；fake: 不明档列表（image 为 data 相对路径）
-    pub fn build(&mut self, entries: &[(usize, Option<SaveEntry>)], fake: &[FakeSave]) {
-        self.map.clear();
-        for (slot, e) in entries {
-            if let Some(e) = e {
-                if let Some(tex) = png_texture(self.creator, &e.thumb) {
-                    self.map.insert(format!("s{slot}"), tex);
-                }
-            }
-        }
-        for (i, f) in fake.iter().enumerate() {
-            let path = format!("{}/{}", gal_config::data_dir(), f.image);
-            if let Ok(tex) = self.creator.load_texture(&path) {
-                self.map.insert(format!("f{i}"), tex);
-            }
-        }
-    }
-
-    pub fn get(&self, key: &str) -> Option<&Texture<'a>> {
-        self.map.get(key)
-    }
-}
-
-/// PNG 字节 → RGBA 纹理
-fn png_texture<'a>(creator: &'a TextureCreator<WindowContext>, png: &[u8]) -> Option<Texture<'a>> {
-    let img = image::load_from_memory(png).ok()?.to_rgba8();
-    let (w, h) = img.dimensions();
-    let mut tex = creator.create_texture_static(Some(PixelFormatEnum::RGBA8888), w, h).ok()?;
-    tex.update(None, &img, w as usize * 4).ok()?;
-    Some(tex)
-}
 
 /// mode_save=true 存档（标题「存档」），false 读档
 #[allow(clippy::too_many_arguments)]

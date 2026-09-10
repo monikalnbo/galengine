@@ -1,40 +1,7 @@
-//! 全 26 条指令的枚举与解析（一处看全所有语法）。ctx 为「文件:行号」中文错误定位。
+//! 剧本指令语法解析（ctx 为「文件:行号」中文错误定位）
 
+use super::types::Command;
 use crate::lexer::LineKind;
-
-#[derive(Debug, Clone)]
-pub enum Command {
-    Bg { storage: String, fade_ms: u32 },
-    Bgm(String),
-    BgmStop,
-    BgmFadeOut { ms: u32 },
-    Se(String),
-    Char { layer: u8, storage: String, x: Option<i32>, y: Option<i32> },
-    CharPos { layer: u8, storage: String, pos_name: String },
-    Cg { storage: String, fade_ms: u32 },
-    Clear,
-    Wait(u32),
-    N(String),
-    Name { name: String, text: String },
-    Flag { var: String, op: char, val: i64 },
-    Set { var: String, expr: String },
-    Jump { file: Option<String>, label: String },
-    If { var: String, op: String, val: String, target: String },
-    Choice { prompt: String, items: Vec<(String, String)> },
-    Input { var: String, prompt: String, width: u32, default: String },
-    MetaFakeSave { date: String, time: String, image: String },
-    MetaCorrupt(String),
-    MetaDeleteLast,
-    TitleEvolve(String),
-    Reach { storage: String, dur_ms: u32, scale: f32 },
-    WindowFxShake(u32),
-    WindowFxTitle(String),
-    WindowFxTitleRestore,
-    Shutdown(u32),
-    DesktopWrite { file: String, content: String },
-    DesktopOpen(String),
-    End,
-}
 
 impl Command {
     pub fn parse(kind: &LineKind, ctx: &str) -> Result<Command, String> {
@@ -81,11 +48,9 @@ impl Command {
                         .ok()
                         .filter(|n| *n < 3)
                         .ok_or(format!("{ctx}：立绘层必须是 0-2"))?;
-                    // 尝试解析数字，否则当作预设位置名
                     let (ox, oy) = match (x.parse::<i32>(), y.parse::<i32>()) {
                         (Ok(nx), Ok(ny)) => (Some(nx), Some(ny)),
                         _ => {
-                            // 预设名（需要访问 config，暂存字符串，interp 时解析）
                             return Ok(Command::CharPos {
                                 layer: lx,
                                 storage: s.to_string(),
@@ -245,59 +210,4 @@ fn jump(file: Option<String>, target: &str) -> Command {
 
 fn num<T: std::str::FromStr>(s: impl AsRef<str>) -> Result<T, String> {
     s.as_ref().parse::<T>().map_err(|_| format!("数字参数无效：{}", s.as_ref()))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn cmd(name: &str, rest: &str) -> Result<Command, String> {
-        Command::parse(&LineKind::Command { name: name.into(), rest: rest.into() }, "t.ks:1")
-    }
-
-    #[test]
-    fn 基本指令解析() {
-        assert!(
-            matches!(cmd("bg", "a 800").unwrap(), Command::Bg { storage, fade_ms: 800 } if storage == "a")
-        );
-        assert!(
-            matches!(cmd("char", "0 hide").unwrap(), Command::Char { layer: 0, ref storage, x: None, y: None } if storage == "hide")
-        );
-        assert!(cmd("char", "3 x").is_err());
-        assert!(
-            matches!(cmd("flag", "a +2").unwrap(), Command::Flag { var, op: '+', val: 2 } if var == "a")
-        );
-        assert!(matches!(cmd("flag", "a -1").unwrap(), Command::Flag { op: '-', val: 1, .. }));
-        assert!(
-            matches!(cmd("reach", "hide").unwrap(), Command::Reach { ref storage, .. } if storage == "hide")
-        );
-        assert!(matches!(
-            cmd("window_fx", "title restore").unwrap(),
-            Command::WindowFxTitleRestore
-        ));
-        assert!(matches!(cmd("shutdown", "").unwrap(), Command::Shutdown(300)));
-    }
-
-    #[test]
-    fn set表达式与desktop内容含空格() {
-        match cmd("set", "a = 1 + 2").unwrap() {
-            Command::Set { var, expr } => {
-                assert_eq!(var, "a");
-                assert_eq!(expr, "1 + 2");
-            }
-            _ => panic!(),
-        }
-        match cmd("desktop_write", "letter.txt|还记得吗。{hero}").unwrap() {
-            Command::DesktopWrite { file, content } => {
-                assert_eq!(file, "letter.txt");
-                assert_eq!(content, "还记得吗。{hero}");
-            }
-            _ => panic!(),
-        }
-    }
-
-    #[test]
-    fn 未知指令中文报错() {
-        assert_eq!(cmd("foo", "").unwrap_err(), "t.ks:1：未知指令「foo」");
-    }
 }

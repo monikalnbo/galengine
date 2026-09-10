@@ -5,6 +5,8 @@ use sdl2::rect::Rect;
 use sdl2::render::{BlendMode, Canvas};
 use sdl2::video::Window;
 
+use crate::widgets::{self, centered_h, centered_in};
+pub use crate::widgets::button;
 use gal_config::{Config, LOGICAL_W};
 use gal_script::interp::InputSpec;
 use gal_text::font::FontBook;
@@ -90,14 +92,14 @@ pub fn hit_test(w: &InputUi, x: f32, y: f32) -> Option<Hit> {
 pub fn draw(canvas: &mut Canvas<Window>, fonts: &mut FontBook, w: &InputUi) -> Result<(), String> {
     canvas.set_blend_mode(BlendMode::Blend);
 
-    // 压暗纱：隔开游戏画面，亮背景下元素不再看不清（v0.1.1）
+    // 压暗纱：隔开游戏画面，亮背景下元素不再看不清
     canvas.set_draw_color(Color::RGBA(0, 0, 0, 160));
     canvas.fill_rect(Rect::new(0, 0, LOGICAL_W, 720))?;
 
     // 提示语
     let tex = fonts.render_text(FONT, Color::RGB(235, 235, 240), &w.spec.prompt)?;
     let q = tex.query();
-    canvas.copy(tex, None, Some(centered(q.width, q.height, 180)))?;
+    canvas.copy(tex, None, Some(centered_h(q.width, q.height, 180)))?;
 
     // 输入框（光标闪烁）
     let br = box_rect(w);
@@ -125,11 +127,11 @@ pub fn draw(canvas: &mut Canvas<Window>, fonts: &mut FontBook, w: &InputUi) -> R
 
     // 预设按钮
     for (i, name) in w.presets.iter().enumerate() {
-        button(canvas, fonts, preset_rect(i), name, false)?;
+        widgets::button(canvas, fonts, preset_rect(i), name, false)?;
     }
 
     // 确认按钮
-    button(canvas, fonts, confirm_rect(), "—— 好 ——", true)?;
+    widgets::button(canvas, fonts, confirm_rect(), "—— 好 ——", true)?;
 
     // 小字说明
     let tex = fonts.render_text(
@@ -138,49 +140,7 @@ pub fn draw(canvas: &mut Canvas<Window>, fonts: &mut FontBook, w: &InputUi) -> R
         "直接键入（支持输入法）· 或点选预设名",
     )?;
     let q = tex.query();
-    canvas.copy(tex, None, Some(centered(q.width, q.height, 575)))
-}
-
-/// 半透明按钮（choice/预设/确认/菜单通用原语）
-pub fn button(
-    canvas: &mut Canvas<Window>,
-    fonts: &mut FontBook,
-    r: Rect,
-    label: &str,
-    accent: bool,
-) -> Result<(), String> {
-    canvas.set_draw_color(if accent {
-        Color::RGBA(52, 74, 128, 235)
-    } else {
-        Color::RGBA(28, 34, 58, 220)
-    });
-    canvas.fill_rect(r)?;
-    canvas.set_draw_color(if accent {
-        Color::RGBA(160, 200, 255, 220)
-    } else {
-        Color::RGBA(130, 150, 200, 150)
-    });
-    canvas.draw_rect(r)?;
-    let tex = fonts.render_text(
-        FONT,
-        if accent { Color::RGB(255, 255, 255) } else { Color::RGB(210, 216, 232) },
-        label,
-    )?;
-    let q = tex.query();
-    canvas.copy(tex, None, Some(centered_in(r, q.width, q.height)))
-}
-
-fn centered_in(r: Rect, w: u32, h: u32) -> Rect {
-    Rect::new(
-        r.x + (r.width() as i32 - w as i32) / 2,
-        r.y + (r.height() as i32 - h as i32) / 2,
-        w,
-        h,
-    )
-}
-
-fn centered(w: u32, h: u32, y: i32) -> Rect {
-    Rect::new((LOGICAL_W as i32 - w as i32) / 2, y, w, h)
+    canvas.copy(tex, None, Some(centered_h(q.width, q.height, 575)))
 }
 
 #[cfg(test)]

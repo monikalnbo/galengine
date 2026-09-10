@@ -13,3 +13,4 @@ pub mod ritual;
 pub mod savemenu;
 pub mod settings;
 pub mod title;
+pub mod widgets;
