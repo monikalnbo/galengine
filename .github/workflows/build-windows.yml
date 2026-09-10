@@ -66,8 +66,12 @@ jobs:
           cp /tmp/sdl2mingw/bin/SDL2*.dll dist/
           # 官方 mingw DLL 未去调试符号（ttf 高达 68MB），剥离后体积正常
           x86_64-w64-mingw32-strip --strip-debug dist/*.dll || true
-          cp -r crates/gal-engine/testdata/game/data dist/game/data
-          rm -rf dist/game/data/savedata
+          if [ -d crates/gal-engine/testdata/game/data ]; then
+            cp -r crates/gal-engine/testdata/game/data dist/game/data
+            rm -rf dist/game/data/savedata
+          else
+            mkdir -p dist/game/data
+          fi
           cd dist && 7z a -tzip "../galengine-demo-windows-x64-${VER}.zip" .
 
       - name: Upload artifact
