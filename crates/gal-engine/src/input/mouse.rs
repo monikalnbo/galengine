@@ -104,6 +104,7 @@ pub fn click(
             }
             if !handled {
                 if let Some(i) = choice::hit_test(g.choice_len(), lx, ly) {
+                    g.choice_sel = 0;
                     g.interp.choose(i)?;
                 }
             }

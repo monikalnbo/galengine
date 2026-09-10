@@ -24,6 +24,9 @@ pub fn parse_script(src: &str) -> Result<Vec<Line>, String> {
     for (i, raw) in src.lines().enumerate() {
         let no = i + 1;
         let t = raw.trim();
+        if t.is_empty() || t.starts_with('#') {
+            continue;
+        }
         if let Some((_no0, _prompt, items)) = pending.as_mut() {
             if t == "endchoice" {
                 let (no0, prompt, items) = pending.take().unwrap();
@@ -43,9 +46,6 @@ pub fn parse_script(src: &str) -> Result<Vec<Line>, String> {
                     }
                 }
             }
-            continue;
-        }
-        if t.is_empty() || t.starts_with('#') {
             continue;
         }
         if let Some(label) = t.strip_prefix('*') {
@@ -93,6 +93,21 @@ mod tests {
         }
         assert!(parse_script("choice 提示\n A|*a").is_err());
         assert!(parse_script("choice 提示\nendchoice").is_err());
+    }
+
+    #[test]
+    fn choice块内含空行与注释() {
+        let src = "choice 选哪个？\n\n  # 注释A\n  A|*a\n\n  # 注释B\n  B|*b\n\nendchoice";
+        let ls = parse_script(src).unwrap();
+        match &ls[0].kind {
+            LineKind::Choice { prompt, items } => {
+                assert_eq!(prompt, "选哪个？");
+                assert_eq!(items.len(), 2);
+                assert_eq!(items[0].0, "A");
+                assert_eq!(items[1].0, "B");
+            }
+            _ => panic!(),
+        }
     }
 
     #[test]

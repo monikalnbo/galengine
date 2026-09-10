@@ -140,7 +140,7 @@ impl Interp {
         self.vars.f = fvars;
         self.stage.restore(snap);
         for c in &mut self.stage.chars {
-            c.chibi = false;
+            c.chibi = c.cur().is_some_and(|p| self.chibi.iter().any(|name| p.contains(name)));
         }
         self.tw.clear();
         self.cur_name = None;

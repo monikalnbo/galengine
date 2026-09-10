@@ -102,8 +102,8 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
                 g.interp.click()?;
             }
         }
-        // 自动模式：行完延迟推进
-        if g.auto && g.interp.state == RunState::WaitClick && g.interp.tw.line_finished() {
+        // 自动模式：页满延迟推进
+        if g.auto && g.interp.state == RunState::WaitClick && g.interp.tw.page_full() {
             g.auto_acc += dt;
             if g.auto_acc >= g.auto_delay_ms() {
                 g.auto_acc = 0.0;
@@ -175,7 +175,12 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
             if gal_script::interp::dbg() {
                 eprintln!("[dbg t={:.2}] ended", g.now_ms);
             }
-            break 'running;
+            if autoclick_ms > 0.0 {
+                break 'running;
+            } else {
+                g.back_to_title();
+                g.msg("剧本终了");
+            }
         }
 
         crate::frame::frame(

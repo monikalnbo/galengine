@@ -84,8 +84,8 @@ pub fn draw(
         canvas.copy(tex, src, Some(dst))?;
     }
 
-    // 行完指示：右下角「▼」呼吸
-    if tw.line_finished() {
+    // 页满指示：右下角「▼」呼吸
+    if tw.page_full() {
         let a = (140.0 + 100.0 * (now_ms / 400.0).sin()) as u8;
         canvas.set_draw_color(Color::RGBA(255, 255, 255, a));
         let bx = br.right() - 34;

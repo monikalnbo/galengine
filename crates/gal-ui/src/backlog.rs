@@ -81,7 +81,13 @@ pub fn draw(
         let text_y = if item.name.is_some() { y + 26 } else { y + 6 };
         let text_tex = fonts.render_text(style.font_size, Color::RGB(230, 230, 235), &item.text)?;
         let tq = text_tex.query();
-        canvas.copy(text_tex, None, Some(Rect::new(PANEL_PAD_X + 16, text_y, tq.width, tq.height)))?;
+        let max_w = (LOGICAL_W as i32 - PANEL_PAD_X * 2 - 40).max(100) as u32;
+        let show_w = tq.width.min(max_w);
+        canvas.copy(
+            text_tex,
+            Some(Rect::new(0, 0, show_w, tq.height)),
+            Some(Rect::new(PANEL_PAD_X + 16, text_y, show_w, tq.height)),
+        )?;
 
         // 项分隔轻微虚线
         canvas.set_draw_color(Color::RGBA(255, 255, 255, 20));

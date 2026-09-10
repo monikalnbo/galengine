@@ -120,6 +120,11 @@ impl Interp {
             Command::Choice { prompt, items } => {
                 self.tw.clear();
                 self.cur_name = None;
+                let prompt = self.replace_names(&prompt);
+                let items = items
+                    .into_iter()
+                    .map(|(t, l)| (self.replace_names(&t), l))
+                    .collect();
                 self.state = RunState::WaitChoice { prompt, items };
                 Ok(true)
             }

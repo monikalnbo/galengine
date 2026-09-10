@@ -43,7 +43,11 @@ pub fn confirm_key(
         }
         Overlay::Settings { .. } => settings_io::enter(g, canvas),
         Overlay::None => match &g.interp.state {
-            RunState::WaitChoice { .. } => g.interp.choose(g.choice_sel).map(|_| true),
+            RunState::WaitChoice { .. } => {
+                let idx = g.choice_sel.min(g.choice_len().saturating_sub(1));
+                g.choice_sel = 0;
+                g.interp.choose(idx).map(|_| true)
+            }
             RunState::WaitInput(_) => confirm_input(g).map(|_| true),
             RunState::WaitClick => g.interp.click().map(|_| true),
             _ => Ok(true),

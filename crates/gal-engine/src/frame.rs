@@ -45,7 +45,7 @@ pub fn frame(
 
     let style = &g.style;
     let name = g.interp.cur_name.clone();
-    let sel = g.choice_sel;
+    let sel = g.choice_sel.min(g.choice_len().saturating_sub(1));
     let now = g.now_ms;
     let auto = g.auto;
 
