@@ -24,6 +24,9 @@ pub enum Overlay {
         fade: f32,
         done: bool,
     },
+    Backlog {
+        scroll: usize,
+    },
     Title {
         sel: usize,
     },

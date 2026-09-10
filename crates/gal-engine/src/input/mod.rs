@@ -64,6 +64,44 @@ pub fn dispatch(
             g.cursor.set_default();
             Ok(true)
         }
+
+        Event::MouseButtonDown { mouse_btn: MouseButton::Right, .. } => {
+            if g.hide_ui {
+                g.hide_ui = false;
+            } else if g.overlay.active() {
+                if !matches!(g.overlay, gal_ui::overlay::Overlay::Title { .. }) {
+                    g.overlay = gal_ui::overlay::Overlay::None;
+                }
+            } else if g.started && g.interp.state == gal_script::interp::RunState::WaitClick {
+                g.hide_ui = true;
+            }
+            Ok(true)
+        }
+
+        Event::MouseWheel { y, .. } => {
+            if y > 0 {
+                // 滚轮向上：在台词态呼出 Backlog / 在 Backlog 中向上滚动
+                if let gal_ui::overlay::Overlay::Backlog { scroll } = &mut g.overlay {
+                    *scroll += 1;
+                } else if !g.overlay.active()
+                    && g.started
+                    && g.interp.state == gal_script::interp::RunState::WaitClick
+                {
+                    g.overlay = gal_ui::overlay::Overlay::Backlog { scroll: 0 };
+                }
+            } else if y < 0 {
+                // 滚轮向下：在 Backlog 中向下滚动 / 在台词态推进对白
+                if let gal_ui::overlay::Overlay::Backlog { scroll } = &mut g.overlay {
+                    *scroll = scroll.saturating_sub(1);
+                } else if !g.overlay.active()
+                    && g.started
+                    && g.interp.state == gal_script::interp::RunState::WaitClick
+                {
+                    g.interp.click()?;
+                }
+            }
+            Ok(true)
+        }
         _ => Ok(true),
     }
 }
@@ -75,6 +113,19 @@ fn key_down(
     renderer: &mut Renderer,
     thumbs: &mut ThumbCache,
 ) -> Result<bool, String> {
+    if g.hide_ui {
+        g.hide_ui = false;
+        return Ok(true);
+    }
+    if let gal_ui::overlay::Overlay::Backlog { scroll } = &mut g.overlay {
+        match k {
+            Keycode::Escape => g.overlay = gal_ui::overlay::Overlay::None,
+            Keycode::Up | Keycode::PageUp => *scroll += 1,
+            Keycode::Down | Keycode::PageDown => *scroll = scroll.saturating_sub(1),
+            _ => g.overlay = gal_ui::overlay::Overlay::None,
+        }
+        return Ok(true);
+    }
     if keys::hotkey_volume(g, k) {
         return Ok(true);
     }
@@ -122,6 +173,11 @@ fn key_down(
             g.auto = !g.auto;
             g.auto_acc = 0.0;
         }
+        Keycode::PageUp
+            if g.interp.state == gal_script::interp::RunState::WaitClick && !g.overlay.active() =>
+        {
+            g.overlay = gal_ui::overlay::Overlay::Backlog { scroll: 0 };
+        }
         Keycode::Up | Keycode::Down | Keycode::Left | Keycode::Right if g.overlay.active() => {
             keys::overlay_move(g, k, canvas);
         }
@@ -154,7 +210,8 @@ pub fn auto_step(g: &mut Game, thumbs: &mut ThumbCache) -> Result<(), String> {
             gal_ui::overlay::Overlay::Menu { .. }
             | gal_ui::overlay::Overlay::Save { .. }
             | gal_ui::overlay::Overlay::Gallery { .. }
-            | gal_ui::overlay::Overlay::Settings { .. } => {
+            | gal_ui::overlay::Overlay::Settings { .. }
+            | gal_ui::overlay::Overlay::Backlog { .. } => {
                 g.overlay = gal_ui::overlay::Overlay::None;
             }
             gal_ui::overlay::Overlay::Ritual { step, fade, .. } => {

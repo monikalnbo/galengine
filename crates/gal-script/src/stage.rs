@@ -52,6 +52,8 @@ impl Layer {
 pub struct StageSnap {
     pub bg: Option<String>,
     pub chars: [Option<String>; 3],
+    #[serde(default)]
+    pub char_offsets: [(i32, i32); 3],
     pub cg: Option<String>,
 }
 
@@ -76,15 +78,17 @@ impl Stage {
         StageSnap {
             bg: self.bg.cur().cloned(),
             chars: [0, 1, 2].map(|i| self.chars[i].cur().cloned()),
+            char_offsets: [0, 1, 2].map(|i| self.chars[i].offset),
             cg: self.cg.cur().cloned(),
         }
     }
 
-    /// 存档恢复：0ms 直切（无渐变）
+    /// 存档恢复：0ms 直切（无渐变），恢复立绘位置
     pub fn restore(&mut self, snap: StageSnap) {
         self.bg.set(snap.bg, 0);
         for (i, path) in snap.chars.into_iter().enumerate() {
             self.chars[i].set(path, 0);
+            self.chars[i].offset = snap.char_offsets[i];
         }
         self.cg.set(snap.cg, 0);
     }

@@ -19,6 +19,10 @@ pub fn click(
     renderer: &mut Renderer,
     thumbs: &mut ThumbCache,
 ) -> Result<bool, String> {
+    if g.hide_ui {
+        g.hide_ui = false;
+        return Ok(true);
+    }
     if g.sys.rest.is_some() {
         if gal_ui::restui::cancel_rect().contains_point((lx as i32, ly as i32)) {
             g.cancel_rest();
@@ -27,6 +31,10 @@ pub fn click(
     }
     if g.overlay.active() {
         match g.overlay.clone() {
+            Overlay::Backlog { .. } => {
+                g.overlay = Overlay::None;
+                return Ok(true);
+            }
             Overlay::Menu { .. } => {
                 if let Some(i) = menu::hit_test(esc_items().len(), g.conf.ui.menu.top_y, lx, ly) {
                     g.overlay = Overlay::Menu { sel: i };

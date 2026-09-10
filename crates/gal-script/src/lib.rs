@@ -7,6 +7,6 @@ pub mod lexer;
 pub mod stage;
 pub mod vars;
 
-pub use interp::{Interp, RunState, SysEvent};
+pub use interp::{BacklogItem, Interp, RunState, SysEvent};
 pub use stage::{Stage, StageSnap};
 pub use vars::{Value, Vars};

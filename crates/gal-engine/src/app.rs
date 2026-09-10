@@ -94,9 +94,13 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
             }
         }
 
-        // 快进（按住 Ctrl；wait/meta 段不可跳——仅台词态生效）
+        // 快进（按住 Ctrl；wait/meta 段不可跳——仅台词态生效；若开启 skip_read 则仅跳已读）
         if g.ctrl_hold && g.interp.state == RunState::WaitClick {
-            g.interp.click()?;
+            let skip_read_only = g.conf.game.skip_read_only
+                || g.interp.vars.sf.get("skipRead") == Some(&Value::Int(1));
+            if !skip_read_only || g.interp.is_cur_line_read() {
+                g.interp.click()?;
+            }
         }
         // 自动模式：行完延迟推进
         if g.auto && g.interp.state == RunState::WaitClick && g.interp.tw.line_finished() {
@@ -120,6 +124,7 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
         g.tick(dt);
         g.interp.tick(dt);
         g.interp.apply_pending(&mut fonts, &g.style);
+        g.sys.audio.pump();
 
         // 拓展驱动（倒计时选项等）
         for e in g.exts.iter_mut() {

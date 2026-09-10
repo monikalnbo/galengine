@@ -1,3 +1,4 @@
+pub mod backlog;
 pub mod bottombar;
 pub mod choice;
 pub mod cursor;

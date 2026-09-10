@@ -10,6 +10,7 @@ pub struct Audio {
     /// 无声卡/初始化失败 → 全部操作静默
     ok: bool,
     music: Option<Music<'static>>,
+    fading_music: Option<Music<'static>>,
     chunks: HashMap<String, Chunk>,
     pub bgm_vol: i32,
     pub se_vol: i32,
@@ -26,9 +27,15 @@ impl Audio {
     pub fn new(bgm_vol: i32, se_vol: i32) -> Self {
         let ok = sdl2::mixer::open_audio(44100, AUDIO_S16LSB, 2, 1024).is_ok();
         sdl2::mixer::allocate_channels(16);
-        let mut a = Self { ok, music: None, chunks: HashMap::new(), bgm_vol, se_vol };
+        let mut a = Self { ok, music: None, fading_music: None, chunks: HashMap::new(), bgm_vol, se_vol };
         a.apply_volumes();
         a
+    }
+
+    pub fn pump(&mut self) {
+        if self.fading_music.is_some() && !sdl2::mixer::Music::is_playing() {
+            self.fading_music = None;
+        }
     }
 
     pub fn apply_volumes(&mut self) {
@@ -43,6 +50,7 @@ impl Audio {
         if !self.ok {
             return;
         }
+        self.fading_music = None;
         if let Some(p) = first_path("bgm", name) {
             match Music::from_file(&p) {
                 Ok(m) => {
@@ -59,14 +67,15 @@ impl Audio {
             sdl2::mixer::Music::halt();
         }
         self.music = None;
+        self.fading_music = None;
     }
 
-    /// 淡出后停止（简化实现：直接 halt，后续接 SDL_mixer fade_out）
+    /// 淡出后停止（保留句柄由 pump/切换时释放，避免立即 Drop 掐断声音）
     pub fn fade_out_bgm(&mut self, ms: u32) {
         if self.ok {
             let _ = sdl2::mixer::Music::fade_out(ms.max(100) as i32);
         }
-        self.music = None;
+        self.fading_music = self.music.take();
     }
 
     pub fn play_se(&mut self, name: &str) {

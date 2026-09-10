@@ -70,6 +70,8 @@ pub struct Game {
     pub auto: bool,
     pub auto_acc: f32,
     pub ctrl_hold: bool,
+    /// 右键隐藏 UI 纯赏图标记
+    pub hide_ui: bool,
     pub conf: Config,
     pub style: DialogStyle,
     pub now_ms: f32,
@@ -108,6 +110,7 @@ impl Game {
             auto: false,
             auto_acc: 0.0,
             ctrl_hold: false,
+            hide_ui: false,
             style,
             conf,
             now_ms: 0.0,
@@ -133,6 +136,7 @@ impl Game {
         self.started = true;
         self.overlay = Overlay::None;
         self.auto = false;
+        self.hide_ui = false;
         self.choice_sel = 0;
         Ok(())
     }
@@ -152,6 +156,7 @@ impl Game {
         self.started = false;
         self.overlay = Overlay::Title { sel: 0 };
         self.auto = false;
+        self.hide_ui = false;
         self.choice_sel = 0;
         self.input_ui = None;
     }

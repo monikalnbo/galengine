@@ -7,7 +7,6 @@ use sdl2::render::{BlendMode, Canvas};
 use sdl2::video::Window;
 
 use crate::systems::Game;
-use gal_config::LOGICAL_H;
 use gal_render::assets::TextureBank;
 use gal_render::renderer::Renderer;
 use gal_script::interp::RunState;
@@ -53,22 +52,24 @@ pub fn frame(
     renderer.compose(canvas, dx, dy, |tc| {
         if g.started {
             gal_render::draw_stage(&g.interp.stage, tc, bank)?;
-            match &g.interp.state {
-                RunState::WaitChoice { prompt, items } => {
-                    choice::draw(tc, fonts, prompt, items, sel)?;
-                    for e in &g.exts {
-                        e.draw(tc, fonts)?; // 拓展叠加（倒计时条等）
+            if !g.hide_ui {
+                match &g.interp.state {
+                    RunState::WaitChoice { prompt, items } => {
+                        choice::draw(tc, fonts, prompt, items, sel)?;
+                        for e in &g.exts {
+                            e.draw(tc, fonts)?; // 拓展叠加（倒计时条等）
+                        }
+                        bottombar::draw(tc, fonts, auto, g.ctrl_hold)?;
                     }
-                    bottombar::draw(tc, fonts, auto, g.ctrl_hold)?;
-                }
-                RunState::WaitInput(_) => {
-                    if let Some(ui) = &g.input_ui {
-                        inputbox::draw(tc, fonts, ui)?;
+                    RunState::WaitInput(_) => {
+                        if let Some(ui) = &g.input_ui {
+                            inputbox::draw(tc, fonts, ui)?;
+                        }
                     }
-                }
-                _ => {
-                    dialog::draw(tc, fonts, style, name.as_deref(), &g.interp.tw, now)?;
-                    bottombar::draw(tc, fonts, auto, g.ctrl_hold)?;
+                    _ => {
+                        dialog::draw(tc, fonts, style, name.as_deref(), &g.interp.tw, now)?;
+                        bottombar::draw(tc, fonts, auto, g.ctrl_hold)?;
+                    }
                 }
             }
         }
@@ -93,17 +94,19 @@ pub fn frame(
         }
     }
 
-    // 中文提示 toast（底部居中）
+    // 中文提示 toast（底部居中，按窗口实际分辨率对齐）
     if let Some(m) = &g.sys.msg {
         canvas.set_blend_mode(BlendMode::Blend);
         let tex = fonts.render_text(26, Color::RGB(255, 224, 160), &m.text)?;
         let q = tex.query();
         let w = q.width + 48;
+        let toast_h = q.height + 20;
+        let (ww, wh) = canvas.output_size().unwrap_or((gal_config::LOGICAL_W, gal_config::LOGICAL_H));
         let r = Rect::new(
-            (canvas.output_size().unwrap().0 as i32 - w as i32) / 2,
-            LOGICAL_H as i32 - 60,
+            (ww as i32 - w as i32) / 2,
+            wh as i32 - toast_h as i32 - 24,
             w,
-            q.height + 20,
+            toast_h,
         );
         canvas.set_draw_color(Color::RGBA(10, 12, 26, 220));
         canvas.fill_rect(r)?;
@@ -181,6 +184,9 @@ fn draw_overlay(
         }
         Overlay::Ritual { step, fade, .. } => {
             ritual::draw(tc, fonts, &g.conf, *step, *fade)?;
+        }
+        Overlay::Backlog { scroll } => {
+            gal_ui::backlog::draw(tc, fonts, &g.style, &g.interp.backlog, *scroll)?;
         }
     }
     if let Some(rest) = &g.sys.rest {

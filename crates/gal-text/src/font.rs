@@ -64,7 +64,7 @@ impl<'a> FontBook<'a> {
         color: Color,
         text: &str,
     ) -> Result<&Texture<'a>, String> {
-        let key = (size, rgb_key(color), text.to_string());
+        let key = (size, rgba_key(color), text.to_string());
         if !self.textures.contains_key(&key) {
             self.font(size)?;
             let font = self.fonts.get(&size).ok_or(format!("字号 {size} 初始化失败"))?;
@@ -82,6 +82,18 @@ impl<'a> FontBook<'a> {
         Ok(self.textures.get(&key).unwrap())
     }
 
+    /// 计算单行前 N 个字符的像素宽度（打字机裁剪绘制用）
+    pub fn line_prefix_w(&mut self, size: u16, line: &str, char_count: usize) -> u32 {
+        let Ok(font) = self.font(size) else { return 0 };
+        let prefix: String = line.chars().take(char_count).collect();
+        if prefix.is_empty() {
+            return 0;
+        }
+        font.size_of(&prefix).map(|(w, _)| w).unwrap_or_else(|_| {
+            prefix.chars().map(|c| font.size_of_char(c).map(|(w, _)| w).unwrap_or(0)).sum()
+        })
+    }
+
     pub fn line_h(&mut self, size: u16) -> i32 {
         self.font(size).map(|f| f.recommended_line_spacing()).unwrap_or((size as f32 * 1.5) as i32)
     }
@@ -91,8 +103,8 @@ impl<'a> FontBook<'a> {
     }
 }
 
-fn rgb_key(c: Color) -> u32 {
-    ((c.r as u32) << 16) | ((c.g as u32) << 8) | c.b as u32
+fn rgba_key(c: Color) -> u32 {
+    ((c.r as u32) << 24) | ((c.g as u32) << 16) | ((c.b as u32) << 8) | c.a as u32
 }
 
 /// TTC 面探测：优先 SC/雅黑面；非 TTC 用 0 号面

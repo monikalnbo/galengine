@@ -41,6 +41,12 @@ pub enum SysEvent {
     DesktopOpen(String),
 }
 
+#[derive(Clone, Debug)]
+pub struct BacklogItem {
+    pub name: Option<String>,
+    pub text: String,
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum RunState {
     WaitClick,
@@ -85,6 +91,8 @@ pub struct Interp {
     pub positions: HashMap<String, SpritePos>,
     /// Q版立绘名单（sprites.chibi 注入；在场时背景虚化）
     pub chibi: std::collections::HashSet<String>,
+    /// 对白历史记录（回卷查阅用）
+    pub backlog: Vec<BacklogItem>,
 }
 
 impl Interp {
@@ -108,6 +116,7 @@ impl Interp {
             pending_text: None,
             positions: SpritesCfg::default().positions,
             chibi: std::collections::HashSet::new(),
+            backlog: Vec::new(),
         }
     }
 
@@ -195,6 +204,15 @@ impl Interp {
         if let Some(text) = self.pending_text.take() {
             let text = self.replace_names(&text);
             self.last_text = text.chars().take(18).collect();
+            // 推入回卷历史（最多保留 100 条）
+            if self.backlog.len() >= 100 {
+                self.backlog.remove(0);
+            }
+            self.backlog.push(BacklogItem {
+                name: self.cur_name.clone(),
+                text: text.clone(),
+            });
+            self.mark_cur_line_read();
             if dbg() {
                 eprintln!(
                     "[dbg] @{}:{} {}",
@@ -208,6 +226,36 @@ impl Interp {
                 self.tw.set_text(&text, font, max_w, style.lines_per_page);
             }
         }
+    }
+
+    /// 标记当前等待行已读（sf.readLines 持久化）
+    pub fn mark_cur_line_read(&mut self) {
+        if let Some(line) = self.stop_line {
+            let key = format!("{}:{}", self.file, line);
+            let mut read_set = self.get_read_lines();
+            if read_set.insert(key) {
+                let joined = read_set.into_iter().collect::<Vec<_>>().join(",");
+                self.vars.sf.insert("readLines".into(), Value::Str(joined));
+            }
+        }
+    }
+
+    /// 当前等待行是否已被阅读过
+    pub fn is_cur_line_read(&self) -> bool {
+        if let Some(line) = self.stop_line {
+            let key = format!("{}:{}", self.file, line);
+            self.get_read_lines().contains(&key)
+        } else {
+            false
+        }
+    }
+
+    fn get_read_lines(&self) -> std::collections::HashSet<String> {
+        self.vars
+            .sf
+            .get("readLines")
+            .map(|v| v.as_str().split(',').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect())
+            .unwrap_or_default()
     }
 
     /// {hero}->f.heroName、{you}->sf.playerName（空回退配置默认）

@@ -32,6 +32,10 @@ pub fn confirm_key(
             ritual_confirm(g)?;
             Ok(true)
         }
+        Overlay::Backlog { .. } => {
+            g.overlay = Overlay::None;
+            Ok(true)
+        }
         Overlay::Title { sel } => title_activate(g, sel, thumbs),
         Overlay::Gallery { .. } => {
             gallery_confirm(g);

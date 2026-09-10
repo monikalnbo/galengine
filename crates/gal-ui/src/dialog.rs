@@ -52,25 +52,33 @@ pub fn draw(
         canvas.copy(tex, None, Some(dst))?;
     }
 
-    // 正文：已完行全显，当前行按 reveal 字数截断
+    // 正文：单行单次纹理缓存 + 字符宽度裁剪绘制（彻底消灭逐字创建纹理的显存暴涨）
     let (cur_line, cur_chars) = tw.reveal_pos();
     let line_h = fonts.line_h(style.font_size);
     for (i, line) in tw.current_page().iter().enumerate() {
-        if i > cur_line {
+        if i > cur_line || line.is_empty() {
             break;
         }
-        let shown = if i < cur_line { line.chars().count() } else { cur_chars };
+        let total_chars = line.chars().count();
+        let shown = if i < cur_line { total_chars } else { cur_chars };
         if shown == 0 {
             continue;
         }
-        let visible: String = line.chars().take(shown).collect();
-        let tex = fonts.render_text(style.font_size, Color::RGB(242, 242, 246), &visible)?;
+        let show_w = if shown < total_chars {
+            Some(fonts.line_prefix_w(style.font_size, line, shown))
+        } else {
+            None
+        };
+        let tex = fonts.render_text(style.font_size, Color::RGB(242, 242, 246), line)?;
         let q = tex.query();
-        canvas.copy(
-            tex,
-            None,
-            Some(Rect::new(style.text_x, style.text_y + i as i32 * line_h, q.width, q.height)),
-        )?;
+        let (src, dst) = match show_w {
+            None => (None, Rect::new(style.text_x, style.text_y + i as i32 * line_h, q.width, q.height)),
+            Some(w) => (
+                Some(Rect::new(0, 0, w, q.height)),
+                Rect::new(style.text_x, style.text_y + i as i32 * line_h, w, q.height),
+            ),
+        };
+        canvas.copy(tex, src, Some(dst))?;
     }
 
     // 行完指示：右下角「▼」呼吸

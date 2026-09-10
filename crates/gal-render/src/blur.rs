@@ -11,10 +11,9 @@ const PASSES: usize = 2;
 
 /// 读图 → 模糊小图（RGBA）。用于 Q版立绘在场时的背景虚化。
 pub fn blurred_small(path: &str) -> Result<Decoded, String> {
-    let img = image::open(path).map_err(|e| format!("背景模糊解码失败：{path}（{e}）"))?;
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
-    let mut small = downscale(rgba.as_raw(), w, h, SMALL_W, SMALL_H);
+    let dec = crate::prefetch::decode(path)
+        .map_err(|e| format!("背景模糊解码失败：{path}（{e}）"))?;
+    let mut small = downscale(&dec.pixels, dec.w, dec.h, SMALL_W, SMALL_H);
     for _ in 0..PASSES {
         box_blur(&mut small);
     }
