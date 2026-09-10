@@ -1,5 +1,7 @@
 # 依赖与构建产物
 /target
 /savedata
+/game/data/savedata
 /.cargo
+
 

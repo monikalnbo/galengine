@@ -49,3 +49,30 @@ fn set表达式与desktop内容含空格() {
 fn 未知指令中文报错() {
     assert_eq!(cmd("foo", "").unwrap_err(), "t.ks:1：未知指令「foo」");
 }
+
+#[test]
+fn char位置名解析() {
+    match cmd("char", "0 alice_normal center").unwrap() {
+        Command::CharPos { layer, storage, pos_name } => {
+            assert_eq!(layer, 0);
+            assert_eq!(storage, "alice_normal");
+            assert_eq!(pos_name, "center");
+        }
+        _ => panic!("应解析为 CharPos"),
+    }
+}
+
+#[test]
+fn 演示剧本start_ks全量解析通过() {
+    let script = include_str!("../../../../template/game/data/scenario/start.ks");
+    let lines = crate::lexer::parse_script(script).expect("词法解析通过");
+    assert!(!lines.is_empty());
+    for line in lines {
+        if let crate::lexer::LineKind::Command { .. } | crate::lexer::LineKind::Choice { .. } =
+            &line.kind
+        {
+            Command::parse(&line.kind, &format!("start.ks:{}", line.no)).expect("指令解析通过");
+        }
+    }
+}
+

@@ -42,6 +42,18 @@ impl Command {
                     x: None,
                     y: None,
                 }),
+                [l, s, pos] => {
+                    let lx = l
+                        .parse::<u8>()
+                        .ok()
+                        .filter(|n| *n < 3)
+                        .ok_or(format!("{ctx}：立绘层必须是 0-2"))?;
+                    Ok(Command::CharPos {
+                        layer: lx,
+                        storage: s.to_string(),
+                        pos_name: pos.to_string(),
+                    })
+                }
                 [l, s, x, y] => {
                     let lx = l
                         .parse::<u8>()
