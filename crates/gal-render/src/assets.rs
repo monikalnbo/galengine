@@ -134,23 +134,8 @@ impl<'a> TextureBank<'a> {
     }
 }
 
-/// 剧本 storage 短名 → 实际路径（bg/cg 查 bgimage jpg|png，立绘查 fgimage png）
+/// 剧本 storage 短名 → 实际路径（委托 gal_config::paths::resolve 统一解析）
 pub fn resolve(kind: &str, storage: &str) -> String {
-    let data = gal_config::data_dir();
-    match kind {
-        "bg" | "cg" => first_exists(
-            &[format!("{data}/bgimage/{storage}.jpg"), format!("{data}/bgimage/{storage}.png")],
-            &format!("{data}/bgimage/{storage}.jpg"),
-        ),
-        "char" => format!("{data}/fgimage/{storage}.png"),
-        _ => format!("{data}/{storage}"),
-    }
+    gal_config::paths::resolve(kind, storage)
 }
 
-fn first_exists(cands: &[String], fallback: &str) -> String {
-    cands
-        .iter()
-        .find(|p| std::path::Path::new(p).exists())
-        .cloned()
-        .unwrap_or_else(|| fallback.to_string())
-}

@@ -1,0 +1,55 @@
+===============================================================
+  galengine 视觉小说引擎（轻量·免安装·即开即玩）使用说明
+===============================================================
+
+【1. 如何开始运行】
+直接双击根目录下的 `galengine.exe` 即可启动游戏！
+默认会加载自带的新手示范剧情。
+
+【2. 如何创作你自己的游戏（零代码·无需编译）】
+引擎的所有游戏内容全部位于 `game/data/` 目录下，直接修改该目录中的文件即可：
+
+- game/data/game.yaml        : 游戏全局配置（游戏标题、窗口分辨率、对话框样式、立绘图层配置）
+- game/data/scenario/start.ks: 游戏起始剧情剧本（纯文本文件，任意文本编辑器如记事本、VSCode 均可直接编辑）
+- game/data/scenario/        : 存放更多章节剧本（如 ch1.ks, badend.ks 等）
+- game/data/bg/ 或 bgimage/  : 背景图片目录（推荐 1280x720，支持 .jpg / .png）
+- game/data/char/ 或 fgimage/: 人物立绘目录（推荐 1280x720 透明底，支持 .png）
+- game/data/cg/              : 特殊 CG 插画（.jpg / .png，命名为 cg_xxx.jpg 可在鉴赏室解锁）
+- game/data/bgm/             : 背景音乐目录（支持 .ogg / .mp3 / .wav）
+- game/data/sound/           : 音效与角色语音（支持 .ogg / .mp3 / .wav）
+
+【3. 常用剧本语法速查】
+剧本采用简明易懂的纯文本 DSL，常见写法：
+- 对话旁白：
+    n 窗外飘落着樱花瓣。
+    name 少女 很高兴认识你！
+- 切换背景与立绘：
+    bg classroom 500       （淡入显示背景，过渡时间 500 毫秒）
+    char 0 heroine_smile center  （在居中位置显示 heroine_smile 立绘）
+- 播放音乐与音效：
+    bgm peaceful_days
+    se click
+- 分支选项与跳转：
+    choice 接下来去哪里？
+      「去图书馆」|*library
+      「去操场」|*field
+    endchoice
+
+    *library
+    n 来到了安静的图书馆。
+    jump *common_end
+
+    *field
+    n 操场上洋溢着青春的呼喊声。
+    jump *common_end
+
+    *common_end
+    end
+
+【4. 发布给玩家】
+当你写完剧本、放好素材后，直接将整个引擎文件夹（包含 exe、dll、game 目录）打包成 ZIP 压缩包，发送给玩家即可解压即玩！
+
+【5. 完整教程文档】
+更多高阶演出指令（转场、立绘震动、好感度变量判断等 26+ 条指令）请参考官方文档：
+https://github.com/monikalnbo/galengine/blob/main/docs/game-authoring.md
+===============================================================

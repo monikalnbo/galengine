@@ -1,0 +1,23 @@
+meta:
+  title: "我的第一部视觉小说"
+  version: "1.0.0"
+  script_start: "start.ks"
+
+display:
+  window_title: "我的第一部视觉小说"
+  width: 1280
+  height: 720
+  resizable: true
+
+ui:
+  dialog:
+    box_rect: [64, 480, 1152, 200]
+    font_size: 26
+    name_font_size: 24
+
+sprites:
+  layers: 3
+  positions:
+    left: { x: 0, y: 0 }
+    center: { x: 320, y: 0 }
+    right: { x: 640, y: 0 }
