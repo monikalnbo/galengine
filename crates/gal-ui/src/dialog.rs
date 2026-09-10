@@ -73,10 +73,13 @@ pub fn draw(
         let q = tex.query();
         let (src, dst) = match show_w {
             None => (None, Rect::new(style.text_x, style.text_y + i as i32 * line_h, q.width, q.height)),
-            Some(w) => (
-                Some(Rect::new(0, 0, w, q.height)),
-                Rect::new(style.text_x, style.text_y + i as i32 * line_h, w, q.height),
-            ),
+            Some(w) => {
+                let w = w.min(q.width);
+                (
+                    Some(Rect::new(0, 0, w, q.height)),
+                    Rect::new(style.text_x, style.text_y + i as i32 * line_h, w, q.height),
+                )
+            }
         };
         canvas.copy(tex, src, Some(dst))?;
     }

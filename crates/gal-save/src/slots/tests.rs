@@ -69,7 +69,16 @@ fn 最新槽与备份删除() {
     assert_eq!(delete_latest(&dir, 9), Some(3));
     assert!(load(&dir, 3).is_none());
     assert!(load(&dir, 1).is_some());
-    assert!(Path::new(&format!("{dir}/backup")).exists());
+    let backup_dir = format!("{dir}/backup");
+    assert!(Path::new(&backup_dir).exists());
+    let files: Vec<String> = std::fs::read_dir(&backup_dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(files.len(), 1);
+    assert!(files[0].starts_with("save3_"));
+    assert!(!files[0].contains(':'));
 }
 
 #[test]

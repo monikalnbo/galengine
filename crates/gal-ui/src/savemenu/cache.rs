@@ -44,11 +44,11 @@ impl<'a> ThumbCache<'a> {
     }
 }
 
-/// PNG 字节 → RGBA 纹理
+/// PNG 字节 → RGBA 纹理（小端架构必须用 ABGR8888，对齐错题本 B5 规约）
 fn png_texture<'a>(creator: &'a TextureCreator<WindowContext>, png: &[u8]) -> Option<Texture<'a>> {
     let img = image::load_from_memory(png).ok()?.to_rgba8();
     let (w, h) = img.dimensions();
-    let mut tex = creator.create_texture_static(Some(PixelFormatEnum::RGBA8888), w, h).ok()?;
+    let mut tex = creator.create_texture_static(Some(PixelFormatEnum::ABGR8888), w, h).ok()?;
     tex.update(None, &img, w as usize * 4).ok()?;
     Some(tex)
 }

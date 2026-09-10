@@ -87,7 +87,7 @@ impl Interp {
                     match (name.as_str(), toks.as_slice()) {
                         ("bg", [s, ..]) => out.push(("bg", s.to_string())),
                         ("cg", [s, ..]) if *s != "hide" => out.push(("cg", s.to_string())),
-                        ("char", [_, s]) if *s != "hide" => out.push(("char", s.to_string())),
+                        ("char", [_, s, ..]) if *s != "hide" => out.push(("char", s.to_string())),
                         ("reach", [s, ..]) if *s != "hide" => out.push(("cg", s.to_string())),
                         _ => {}
                     }

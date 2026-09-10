@@ -48,6 +48,14 @@ impl<'a> TextureBank<'a> {
         Ok(())
     }
 
+    /// 预解码喂料：GPU 缓存命中或预解码管线中已有（在途/已就绪/已知失败）直接跳过，杜绝 60fps 盲循环重复解码
+    pub fn prefetch_asset(&mut self, path: &str) {
+        if self.cache.contains_key(path) || self.prefetch.contains(path) {
+            return;
+        }
+        self.prefetch.request(path);
+    }
+
     fn build_decoded(&self, path: &str, dec: &Decoded) -> Result<Texture<'a>, String> {
         // 护眼降饱和：仅背景/CG（立绘保持原饱和度突出主体）
         let pixels = if path.contains("/bgimage/") && self.bg_saturation < 1.0 {

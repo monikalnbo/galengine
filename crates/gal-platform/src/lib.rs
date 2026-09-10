@@ -87,10 +87,13 @@ pub fn desktop_open(file: &str) -> Result<(), String> {
 
 pub fn desktop_open_url(url: &str) -> Result<(), String> {
     if cfg!(windows) {
-        Command::new("cmd")
-            .args(["/C", "start", url])
+        // Windows：使用 rundll32 调用系统协议处理器，不走 cmd.exe，防范 & 符号命令拼接注入与参数截断
+        Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", url])
             .spawn()
             .map_err(|e| format!("打开URL失败：{e}"))?;
+    } else if cfg!(target_os = "macos") {
+        Command::new("open").arg(url).spawn().map_err(|e| format!("打开URL失败：{e}"))?;
     } else {
         Command::new("xdg-open").arg(url).spawn().map_err(|e| format!("打开URL失败：{e}"))?;
     }

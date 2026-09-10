@@ -20,6 +20,7 @@ pub struct Prefetcher {
     rx_done: Receiver<Msg>,
     staging: HashMap<String, Arc<Decoded>>,
     inflight: HashSet<String>,
+    failed: HashSet<String>,
     pub stats_done: u64,
 }
 
@@ -33,10 +34,20 @@ impl Prefetcher {
                 let _ = tx_done.send(Msg::Done(path, dec));
             }
         });
-        Self { tx_req, rx_done, staging: HashMap::new(), inflight: HashSet::new(), stats_done: 0 }
+        Self {
+            tx_req,
+            rx_done,
+            staging: HashMap::new(),
+            inflight: HashSet::new(),
+            failed: HashSet::new(),
+            stats_done: 0,
+        }
     }
 
     pub fn request(&mut self, path: &str) {
+        if self.staging.contains_key(path) || self.failed.contains(path) {
+            return;
+        }
         if self.inflight.insert(path.to_string()) {
             let _ = self.tx_req.send(path.to_string());
         }
@@ -46,11 +57,20 @@ impl Prefetcher {
     pub fn pump(&mut self) {
         while let Ok(Msg::Done(path, res)) = self.rx_done.try_recv() {
             self.inflight.remove(&path);
-            if let Ok(dec) = res {
-                self.staging.insert(path, dec);
-                self.stats_done += 1;
+            match res {
+                Ok(dec) => {
+                    self.staging.insert(path, dec);
+                    self.stats_done += 1;
+                }
+                Err(_) => {
+                    self.failed.insert(path);
+                }
             }
         }
+    }
+
+    pub fn contains(&self, path: &str) -> bool {
+        self.inflight.contains(path) || self.staging.contains_key(path) || self.failed.contains(path)
     }
 
     pub fn take(&mut self, path: &str) -> Option<Arc<Decoded>> {
@@ -59,6 +79,7 @@ impl Prefetcher {
 
     pub fn retain(&mut self, keep: &HashSet<String>) {
         self.staging.retain(|k, _| keep.contains(k));
+        self.failed.retain(|k| keep.contains(k));
     }
 }
 

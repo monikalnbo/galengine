@@ -100,7 +100,13 @@ pub fn delete_latest(dir: &str, slots: usize) -> Option<usize> {
     let _ = std::fs::create_dir_all(&backup_dir);
     let stamp = std::fs::metadata(&path).ok().and_then(|m| m.modified().ok());
     let stamp = stamp.map(|t| unix_to_stamp(unix_secs(t))).unwrap_or_else(|| "unknown".into());
-    let _ = std::fs::rename(&path, format!("{backup_dir}/save{slot}_{stamp}.json"));
+    // 跨平台文件名安全转义：冒号/空格/斜杠转为 '-'，杜绝 Windows NTFS 非法字符报错
+    let safe_stamp = stamp.replace([':', ' ', '/', '\\'], "-");
+    let backup_file = format!("{backup_dir}/save{slot}_{safe_stamp}.json");
+    if std::fs::rename(&path, &backup_file).is_err() {
+        let _ = std::fs::copy(&path, &backup_file);
+        let _ = std::fs::remove_file(&path);
+    }
     Some(slot)
 }
 

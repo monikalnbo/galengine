@@ -34,3 +34,8 @@ pub fn cell_rect(idx: usize) -> Rect {
 pub fn hit_test(n: usize, x: f32, y: f32) -> Option<usize> {
     (0..n).find(|&i| cell_rect(i).contains_point((x as i32, y as i32)))
 }
+
+/// 右上角关闭按钮矩形（共享几何源，供 draw 与 mouse click 统一使用）
+pub fn close_rect() -> Rect {
+    Rect::new(LOGICAL_W as i32 - 216, 54, 140, 52)
+}

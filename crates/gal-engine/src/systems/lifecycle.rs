@@ -36,6 +36,7 @@ impl Game {
         self.hide_ui = false;
         self.choice_sel = 0;
         self.input_ui = None;
+        self.sys.audio.stop_bgm();
     }
 
     /// 关机取消（Rest 覆盖层按钮）

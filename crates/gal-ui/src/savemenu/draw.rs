@@ -6,7 +6,7 @@ use sdl2::render::{BlendMode, Canvas};
 use sdl2::video::Window;
 
 use super::cache::ThumbCache;
-use super::cell_rect;
+use super::{cell_rect, close_rect};
 use crate::widgets::button;
 use gal_config::LOGICAL_W;
 use gal_save::meta::FakeSave;
@@ -109,7 +109,7 @@ pub fn draw(
         )?;
     }
 
-    button(canvas, fonts, Rect::new(LOGICAL_W as i32 - 216, 54, 140, 52), "关闭 Esc", false)?;
+    button(canvas, fonts, close_rect(), "关闭 Esc", false)?;
     Ok(())
 }
 

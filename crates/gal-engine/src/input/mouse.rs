@@ -44,6 +44,10 @@ pub fn click(
                 }
             }
             Overlay::Save { mode_save, .. } => {
+                if savemenu::close_rect().contains_point((lx as i32, ly as i32)) {
+                    g.overlay = Overlay::None;
+                    return Ok(true);
+                }
                 let n = g.save_entries.len() + g.sys.meta.fake_saves.len();
                 if let Some(i) = savemenu::hit_test(n, lx, ly) {
                     g.overlay = Overlay::Save { mode_save, sel: i };

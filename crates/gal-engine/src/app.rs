@@ -142,7 +142,7 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
         // 缓存层收货 + 预读喂料 + 场景切换回收
         bank.prefetch.pump();
         for (kind, storage) in g.interp.lookahead_storages(40) {
-            bank.prefetch.request(&assets::resolve(kind, &storage));
+            bank.prefetch_asset(&assets::resolve(kind, &storage));
         }
         let cur_bg = g.interp.stage.bg.cur().cloned();
         if cur_bg != last_bg {

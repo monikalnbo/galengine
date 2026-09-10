@@ -95,7 +95,7 @@ pub fn draw_grid(
         if open {
             bank.draw_scaled(
                 canvas,
-                &format!("{}/bgimage/{name}.jpg", gal_config::data_dir()),
+                &gal_render::assets::resolve("cg", name),
                 img,
                 1.0,
             )?;
@@ -139,7 +139,7 @@ pub fn draw_full(
 ) -> Result<(), String> {
     bank.draw_scaled(
         canvas,
-        &format!("{}/bgimage/{name}.jpg", gal_config::data_dir()),
+        &gal_render::assets::resolve("cg", name),
         Rect::new(0, 0, LOGICAL_W, LOGICAL_H),
         1.0,
     )?;
