@@ -34,7 +34,8 @@ pub fn draw(
         Some(Rect::new(PANEL_PAD_X, 36, header_tex.query().width, header_tex.query().height)),
     )?;
 
-    let hint_tex = fonts.render_text(18, Color::RGB(140, 150, 170), "滚轮 / ↑↓ 滚动 ｜ 点击 / Esc 返回")?;
+    let hint_tex =
+        fonts.render_text(18, Color::RGB(140, 150, 170), "滚轮 / ↑↓ 滚动 ｜ 点击 / Esc 返回")?;
     canvas.copy(
         hint_tex,
         None,
@@ -107,13 +108,9 @@ pub fn draw(
         canvas.set_draw_color(Color::RGBA(40, 45, 65, 200));
         canvas.fill_rect(Rect::new(bar_x, bar_y, 6, bar_h as u32))?;
 
-        let thumb_h =
-            ((ITEMS_PER_PAGE as f32 / total as f32) * bar_h as f32).max(24.0) as u32;
-        let progress = if max_scroll > 0 {
-            (max_scroll - cur_scroll) as f32 / max_scroll as f32
-        } else {
-            1.0
-        };
+        let thumb_h = ((ITEMS_PER_PAGE as f32 / total as f32) * bar_h as f32).max(24.0) as u32;
+        let progress =
+            if max_scroll > 0 { (max_scroll - cur_scroll) as f32 / max_scroll as f32 } else { 1.0 };
         let thumb_y = bar_y + ((bar_h as u32 - thumb_h) as f32 * progress) as i32;
 
         canvas.set_draw_color(Color::RGBA(180, 195, 230, 200));

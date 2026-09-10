@@ -72,7 +72,9 @@ pub fn draw(
         let tex = fonts.render_text(style.font_size, Color::RGB(242, 242, 246), line)?;
         let q = tex.query();
         let (src, dst) = match show_w {
-            None => (None, Rect::new(style.text_x, style.text_y + i as i32 * line_h, q.width, q.height)),
+            None => {
+                (None, Rect::new(style.text_x, style.text_y + i as i32 * line_h, q.width, q.height))
+            }
             Some(w) => {
                 let w = w.min(q.width);
                 (

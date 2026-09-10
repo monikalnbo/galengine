@@ -70,7 +70,9 @@ impl Prefetcher {
     }
 
     pub fn contains(&self, path: &str) -> bool {
-        self.inflight.contains(path) || self.staging.contains_key(path) || self.failed.contains(path)
+        self.inflight.contains(path)
+            || self.staging.contains_key(path)
+            || self.failed.contains(path)
     }
 
     pub fn take(&mut self, path: &str) -> Option<Arc<Decoded>> {

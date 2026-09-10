@@ -93,12 +93,7 @@ pub fn draw_grid(
         canvas.draw_rect(r)?;
         let img = Rect::new(r.x + 8, r.y + 8, r.width() - 16, (r.height() - 16) * 3 / 4);
         if open {
-            bank.draw_scaled(
-                canvas,
-                &gal_render::assets::resolve("cg", name),
-                img,
-                1.0,
-            )?;
+            bank.draw_scaled(canvas, &gal_render::assets::resolve("cg", name), img, 1.0)?;
         } else {
             // 锁定剪影：深色块 + ?
             canvas.set_draw_color(Color::RGB(10, 12, 22));

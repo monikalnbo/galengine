@@ -101,13 +101,9 @@ pub fn frame(
         let q = tex.query();
         let w = q.width + 48;
         let toast_h = q.height + 20;
-        let (ww, wh) = canvas.output_size().unwrap_or((gal_config::LOGICAL_W, gal_config::LOGICAL_H));
-        let r = Rect::new(
-            (ww as i32 - w as i32) / 2,
-            wh as i32 - toast_h as i32 - 24,
-            w,
-            toast_h,
-        );
+        let (ww, wh) =
+            canvas.output_size().unwrap_or((gal_config::LOGICAL_W, gal_config::LOGICAL_H));
+        let r = Rect::new((ww as i32 - w as i32) / 2, wh as i32 - toast_h as i32 - 24, w, toast_h);
         canvas.set_draw_color(Color::RGBA(10, 12, 26, 220));
         canvas.fill_rect(r)?;
         canvas.copy(tex, None, Some(Rect::new(r.x + 24, r.y + 10, q.width, q.height)))?;

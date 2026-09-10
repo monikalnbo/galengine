@@ -18,10 +18,7 @@ impl Interp {
             if self.backlog.len() >= 100 {
                 self.backlog.remove(0);
             }
-            self.backlog.push(BacklogItem {
-                name: self.cur_name.clone(),
-                text: text.clone(),
-            });
+            self.backlog.push(BacklogItem { name: self.cur_name.clone(), text: text.clone() });
             self.mark_cur_line_read();
             if dbg() {
                 eprintln!(
@@ -64,7 +61,9 @@ impl Interp {
         self.vars
             .sf
             .get("readLines")
-            .map(|v| v.as_str().split(',').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect())
+            .map(|v| {
+                v.as_str().split(',').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect()
+            })
             .unwrap_or_default()
     }
 

@@ -66,9 +66,7 @@ pub fn key_down(
         }
         Keycode::F10 => saves::do_load(g, g.sys.slots),
         Keycode::Return | Keycode::KpEnter | Keycode::Space => {
-            if !activate::confirm_key(g, canvas, renderer, thumbs)? {
-                quit = true;
-            }
+            quit = !activate::confirm_key(g, canvas, renderer, thumbs)?;
         }
         Keycode::LCtrl | Keycode::RCtrl => g.ctrl_hold = true,
         Keycode::A

@@ -27,7 +27,8 @@ impl Audio {
     pub fn new(bgm_vol: i32, se_vol: i32) -> Self {
         let ok = sdl2::mixer::open_audio(44100, AUDIO_S16LSB, 2, 1024).is_ok();
         sdl2::mixer::allocate_channels(16);
-        let mut a = Self { ok, music: None, fading_music: None, chunks: HashMap::new(), bgm_vol, se_vol };
+        let mut a =
+            Self { ok, music: None, fading_music: None, chunks: HashMap::new(), bgm_vol, se_vol };
         a.apply_volumes();
         a
     }

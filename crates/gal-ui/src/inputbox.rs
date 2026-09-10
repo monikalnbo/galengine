@@ -5,8 +5,8 @@ use sdl2::rect::Rect;
 use sdl2::render::{BlendMode, Canvas};
 use sdl2::video::Window;
 
-use crate::widgets::{self, centered_h, centered_in};
 pub use crate::widgets::button;
+use crate::widgets::{self, centered_h, centered_in};
 use gal_config::{Config, LOGICAL_W};
 use gal_script::interp::InputSpec;
 use gal_text::font::FontBook;
