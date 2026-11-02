@@ -174,6 +174,10 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
         // v0.3.2 音频等待（wb/wl/ws/wf）：轮询音频状态，满足即放行解释器
         use gal_script::interp::{AudioWait, RunState};
         if let RunState::WaitAudio(w) = &g.interp.state {
+            if *w == AudioWait::VideoDone && !g.sys.audio.ok {
+                // 无声卡路径 match 被短路，wv 的作者提醒单独留证（一次等待一次）
+                g.sys.audio.note_video_wait();
+            }
             let a = &g.sys.audio;
             // 无声卡降级：条件立即满足（不卡演出）
             let ok = !a.ok
@@ -182,6 +186,10 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
                     AudioWait::BgmLoopHit => a.peek_loop_hit(),
                     AudioWait::SeDone => !a.se_playing(),
                     AudioWait::SeFade => !a.se_fading(),
+                    // v0.3.3 wm/wv/wp
+                    AudioWait::MusicDone => !a.bgm_playing(),
+                    AudioWait::VideoDone => !a.video_playing(),
+                    AudioWait::AllDone => !a.any_playing(),
                 };
             if ok {
                 g.interp.audio_wait_release()?;

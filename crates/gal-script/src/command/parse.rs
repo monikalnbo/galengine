@@ -206,6 +206,10 @@ impl Command {
             "wl" if tokens.is_empty() => Ok(Command::WaitLoop),
             "ws" if tokens.is_empty() => Ok(Command::WaitSe),
             "wf" if tokens.is_empty() => Ok(Command::WaitSeFade),
+            // v0.3.3 KAG3 wm/wv/wp：等 BGM 播完 / 等视频播完 / 等全部声音播完
+            "wm" if tokens.is_empty() => Ok(Command::WaitMusic),
+            "wv" if tokens.is_empty() => Ok(Command::WaitVideo),
+            "wp" if tokens.is_empty() => Ok(Command::WaitAllSound),
             // KAG3 `wt`：多种等待类型；当前只实装转场等待（其余参数忽略）
             "wt" => Ok(Command::WaitTrans),
             "clear" => Ok(Command::Clear),

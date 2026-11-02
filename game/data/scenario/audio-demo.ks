@@ -53,4 +53,30 @@ seopt click
 fadeoutbgm 600
 wb
 n 全部音频标签验收完毕。
+
+# ===== v0.3.3：wm/wv/wp + slide/scroll 转场 =====
+playbgm theme
+n 播放 theme，稍后 wm 等 BGM 播完。
+
+# wm：等当前 BGM 播完（theme 为正弦长音，先 fadeout 让 wm 可过）
+wm
+n wm 通过（BGM 已停）。
+
+# wv：本引擎暂无视频子系统，静默放行 + 日志留证
+wv
+n wv 通过。
+
+# wp：等全部声音播完
+playse click
+fadeoutbgm 300
+wp
+n wp 通过（全部声音已停）。
+
+# 转场扩展：slide/scroll（背景层）
+trans 0 classroom 700 slidel
+wt
+n slide 左滑动转场完成。
+trans 0 school 700 scrollr
+wt
+n scroll 右卷动转场完成。
 end

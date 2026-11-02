@@ -51,6 +51,13 @@ pub enum Command {
     },
     /// 等待在途转场结束（KAG3 `wt` 的转场形态）
     WaitTrans,
+    // ===== v0.3.3 KAG3 等待标签（wm/wv/wp）=====
+    /// wm：等 BGM 播完
+    WaitMusic,
+    /// wv：等视频播完（本引擎暂无视频子系统 → 立即放行）
+    WaitVideo,
+    /// wp：等全部声音（BGM/SE/语音）播完
+    WaitAllSound,
     // ===== v0.3.2 KAG3 音频标签组（双缓冲/淡入淡出/循环点/等待语义）=====
     /// playbgm [ms]：双缓冲播放 BGM（可指定淡入 ms）
     PlayBgm {

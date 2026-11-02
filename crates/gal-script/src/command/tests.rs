@@ -268,3 +268,54 @@ fn v032音频标签组_解析() {
     assert!(cmd("fadeoutbgm", "").is_err());
     assert!(cmd("fadebgm", "40").is_err());
 }
+
+#[test]
+fn v033等待标签_解析() {
+    // wm/wv/wp：与 wb/wl/ws/wf 同款无参等待
+    assert!(matches!(cmd("wm", "").unwrap(), Command::WaitMusic));
+    assert!(matches!(cmd("wv", "").unwrap(), Command::WaitVideo));
+    assert!(matches!(cmd("wp", "").unwrap(), Command::WaitAllSound));
+    // 带参数视为剧本写错，中文报错
+    assert!(cmd("wm", "extra").is_err());
+    assert!(cmd("wv", "1").is_err());
+    assert!(cmd("wp", "x").is_err());
+}
+
+#[test]
+fn v033转场方法_解析() {
+    use crate::stage::{Direction, TransMethod};
+    assert_eq!(TransMethod::parse("crossfade"), TransMethod::Crossfade);
+    assert_eq!(TransMethod::parse("universal"), TransMethod::Universal);
+    assert_eq!(TransMethod::parse("slidel"), TransMethod::Slide(Direction::Left));
+    assert_eq!(TransMethod::parse("slide r"), TransMethod::Slide(Direction::Right));
+    assert_eq!(TransMethod::parse("scrollu"), TransMethod::Scroll(Direction::Up));
+    assert_eq!(TransMethod::parse("scroll down"), TransMethod::Scroll(Direction::Down));
+    // 未知方法退化交叉淡化（不报错，静默留证口径）
+    assert_eq!(TransMethod::parse("mosaicscroll"), TransMethod::Unsupported);
+    assert_eq!(TransMethod::parse("slide x"), TransMethod::Unsupported);
+}
+
+#[test]
+fn v033转场偏移_slide_scroll() {
+    use crate::stage::{Direction, TransClip, TransMethod};
+    let clip = |m| TransClip {
+        method: m,
+        layer: 0,
+        to: String::new(),
+        from: None,
+        offset: (0, 0),
+        dur_ms: 1000.0,
+        left_ms: 500.0,
+    };
+    // slide l：胶片式——旧内容左移半屏、新内容从右侧半屏处跟进
+    let (old, new) = clip(TransMethod::Slide(Direction::Left)).slide_offsets(0.5);
+    assert_eq!(old, (-640, 0));
+    assert_eq!(new, (640, 0));
+    // scroll u：擦除式——旧内容原位、新内容从上方推入半屏
+    let (old, new) = clip(TransMethod::Scroll(Direction::Up)).slide_offsets(0.5);
+    assert_eq!(old, (0, 0));
+    assert_eq!(new, (0, -360));
+    // crossfade：全零偏移
+    let (old, new) = clip(TransMethod::Crossfade).slide_offsets(0.5);
+    assert_eq!((old, new), ((0, 0), (0, 0)));
+}

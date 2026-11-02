@@ -130,6 +130,12 @@ pub enum AudioWait {
     SeDone,
     /// wf：SE 淡入淡出结束
     SeFade,
+    /// wm（v0.3.3）：BGM/音乐播完（含淡出落停）
+    MusicDone,
+    /// wv（v0.3.3）：视频播完（本引擎暂无视频子系统 → 恒立即放行 + 留证）
+    VideoDone,
+    /// wp（v0.3.3）：全部声音（BGM/SE/语音）播完
+    AllDone,
 }
 
 /// 输入框配置规格

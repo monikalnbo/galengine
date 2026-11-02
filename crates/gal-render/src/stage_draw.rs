@@ -50,13 +50,21 @@ pub fn draw_stage(
         if let Some(t) = &s.trans {
             if t.layer == n {
                 let (dx, dy) = t.offset;
+                // v0.3.3 slide/scroll：按进度整体位移（不叠透明度）；其余交叉淡化
+                let ((ox, oy), (nx, ny)) = t.slide_offsets(t.alpha());
+                let geometric = ox != 0 || oy != 0 || nx != 0 || ny != 0;
                 if let Some(from) = &t.from {
-                    let blur = chibi_on && n == 0;
-                    draw_trans_side(from, t.old_alpha(), blur, canvas, bank, dx, dy)?;
+                    if geometric {
+                        let blur = chibi_on && n == 0;
+                        draw_trans_side(from, 1.0, blur, canvas, bank, dx + ox, dy + oy)?;
+                    } else {
+                        let blur = chibi_on && n == 0;
+                        draw_trans_side(from, t.old_alpha(), blur, canvas, bank, dx, dy)?;
+                    }
                 }
                 if !t.to.is_empty() {
                     let blur = chibi_on && n == 0;
-                    draw_trans_side(&t.to, t.alpha(), blur, canvas, bank, dx, dy)?;
+                    draw_trans_side(&t.to, 1.0, blur, canvas, bank, dx + nx, dy + ny)?;
                 } else {
                     // 淡出到空：目标层内容（已清空）无需绘制
                 }

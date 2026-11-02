@@ -137,8 +137,33 @@ pub enum TransMethod {
     Universal,
     /// `trans ... crossfade`
     Crossfade,
+    /// v0.3.3 滑动类：新内容从方向一侧滑入、旧内容反向滑出（slide l/r/u/d）
+    Slide(Direction),
+    /// v0.3.3 卷动类：旧内容原位、新内容从方向一侧推入覆盖（scroll l/r/u/d）
+    Scroll(Direction),
     /// 未知/暂不支持的规则名：退化为交叉淡化，并记录原文供诊断
     Unsupported,
+}
+
+/// v0.3.3 slide/scroll 方向
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Direction {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
+impl Direction {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "l" | "left" => Some(Direction::Left),
+            "r" | "right" => Some(Direction::Right),
+            "u" | "up" => Some(Direction::Up),
+            "d" | "down" => Some(Direction::Down),
+            _ => None,
+        }
+    }
 }
 
 impl TransMethod {
@@ -146,7 +171,19 @@ impl TransMethod {
         match name {
             "universal" => TransMethod::Universal,
             "crossfade" => TransMethod::Crossfade,
-            _ => TransMethod::Unsupported,
+            _ => {
+                if let Some(rest) = name.strip_prefix("slide") {
+                    Direction::parse(rest.trim())
+                        .map(TransMethod::Slide)
+                        .unwrap_or(TransMethod::Unsupported)
+                } else if let Some(rest) = name.strip_prefix("scroll") {
+                    Direction::parse(rest.trim())
+                        .map(TransMethod::Scroll)
+                        .unwrap_or(TransMethod::Unsupported)
+                } else {
+                    TransMethod::Unsupported
+                }
+            }
         }
     }
 }
@@ -184,6 +221,37 @@ impl TransClip {
 
     pub fn done(&self) -> bool {
         self.left_ms <= 0.0
+    }
+
+    /// v0.3.3 slide/scroll 的瞬时偏移：返回 (旧内容偏移, 新内容偏移)（像素）。
+    /// - slide l：胶片式——旧内容向左滑出、新内容从右侧整屏跟进
+    /// - scroll l：擦除式——旧内容原位、新内容从左侧推入覆盖
+    /// - 其余 method 一律 (0,0)（交叉淡化语义）。
+    pub fn slide_offsets(&self, progress: f32) -> ((i32, i32), (i32, i32)) {
+        let dir = match self.method {
+            TransMethod::Slide(d) | TransMethod::Scroll(d) => d,
+            _ => return ((0, 0), (0, 0)),
+        };
+        let (w, h) = (gal_config::LOGICAL_W as f32, gal_config::LOGICAL_H as f32);
+        // 行进单位向量：l=-x / r=+x / u=-y / d=+y；对应边长
+        let (ux, uy, dim): (f32, f32, f32) = match dir {
+            Direction::Left => (-1.0, 0.0, w),
+            Direction::Right => (1.0, 0.0, w),
+            Direction::Up => (0.0, -1.0, h),
+            Direction::Down => (0.0, 1.0, h),
+        };
+        match self.method {
+            // slide：胶片式——旧内容沿方向滑出、新内容从行进反侧整屏跟进
+            TransMethod::Slide(_) => (
+                ((ux * dim * progress) as i32, (uy * dim * progress) as i32),
+                ((ux * dim * (progress - 1.0)) as i32, (uy * dim * (progress - 1.0)) as i32),
+            ),
+            // scroll：擦除式——旧内容原位、新内容从方向侧推入覆盖
+            _ => (
+                (0, 0),
+                ((ux * dim * (1.0 - progress)) as i32, (uy * dim * (1.0 - progress)) as i32),
+            ),
+        }
     }
 }
 

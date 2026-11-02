@@ -2,6 +2,24 @@
 
 遵循 [语义化版本](https://semver.org/lang/zh-CN/)。旧 `game.yaml`、旧存档、旧 `savedata/global.json` 均可直接使用。
 
+## v0.3.3 — 2026-11-02
+
+**等待标签收尾 + 转场扩展批**：KAG3 等待标签 `wm`/`wv`/`wp` 落地（v0.3.2 的 `WaitAudio` 轮询地基上增量实现）；
+转场方法族在 crossfade/universal 之外新增 **slide（四向滑动）/ scroll（四向卷动）** 两家族共 8 个方法名。
+旧 `game.yaml`、旧剧本、旧存档零改动兼容（实测验证）；静默失败留证方针延续（wv 无视频子系统 → 立即放行 + engine.log WARN）。
+
+### 新增标签（3 个）
+
+- `wm`：等 BGM 播完（含淡出落停；无声卡立即放行）。
+- `wv`：等视频播完（本引擎暂无视频子系统 → 立即放行 + WARN 留证）。
+- `wp`：等全部声音（BGM/SE/语音）播完。
+
+### 转场扩展（8 个方法名）
+
+- `slide l/r/u/d`：胶片式滑动——旧内容沿方向滑出、新内容整屏跟进。
+- `scroll l/r/u/d`：擦除式卷动——旧内容原位、新内容从方向侧推入覆盖。
+- 纯几何实现（零新依赖、零 shader）；未知方法名照旧退化交叉淡化。
+
 ## v0.3.2 — 2026-11-02
 
 **音频库化批**：gal-audio 手写混音器整体退役，换用 [kira 0.10](https://github.com/tazz4843/kira)（内部 cpal 输出 + symphonia 解码）；

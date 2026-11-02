@@ -221,6 +221,19 @@ impl Interp {
                 }
                 None => Ok(false),
             },
+            // ===== v0.3.3 KAG3 wm/wv/wp：进入 WaitAudio，引擎轮询放行 =====
+            Command::WaitMusic => {
+                self.state = RunState::WaitAudio(AudioWait::MusicDone);
+                Ok(true)
+            }
+            Command::WaitVideo => {
+                self.state = RunState::WaitAudio(AudioWait::VideoDone);
+                Ok(true)
+            }
+            Command::WaitAllSound => {
+                self.state = RunState::WaitAudio(AudioWait::AllDone);
+                Ok(true)
+            }
             Command::Clear => {
                 self.tw.clear();
                 self.cur_text.clear();

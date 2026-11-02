@@ -491,7 +491,7 @@ impl Audio {
         }
     }
 
-    fn voice_playing(&self) -> bool {
+    pub fn voice_playing(&self) -> bool {
         self.mixer.as_ref().and_then(|m| m.playing.get(VOICE)).is_some_and(|p| p.active())
     }
 
@@ -559,7 +559,30 @@ impl Audio {
 
     /// v0.3.2 音频等待原始查询（ws）：是否还有 SE 在发声
     pub fn se_playing(&self) -> bool {
-        self.mixer.as_ref().map(|m| m.playing.values().any(|p| p.active())).unwrap_or(false)
+        self.mixer
+            .as_ref()
+            .map(|m| m.playing.keys().any(|k| k.starts_with("se_") && m.playing[k].active()))
+            .unwrap_or(false)
+    }
+
+    /// v0.3.3 音频等待原始查询（wm）：当前槽 BGM 是否仍在发声
+    pub fn bgm_playing(&self) -> bool {
+        self.mixer.as_ref().and_then(|m| m.playing.get(self.bgm_slot)).is_some_and(|p| p.active())
+    }
+
+    /// v0.3.3 wv 等待进入时的作者提醒（暂无视频子系统，每次 wv 留证一次）
+    pub fn note_video_wait(&mut self) {
+        audit!(Warn, "audio", "wv：本引擎暂无视频子系统，立即放行（作者请核对剧本）");
+    }
+
+    /// v0.3.3 音频等待原始查询（wv）：视频是否在播（本引擎暂无视频子系统 → 恒 false）
+    pub fn video_playing(&self) -> bool {
+        false
+    }
+
+    /// v0.3.3 音频等待原始查询（wp）：BGM/SE/语音任一仍在发声
+    pub fn any_playing(&self) -> bool {
+        self.bgm_playing() || self.se_playing() || self.voice_playing()
     }
 
     /// v0.3.2 fadese：最近的 SE 实例音量淡到指定百分比
