@@ -86,6 +86,138 @@ fn 剧本错误不panic而是记录并可继续() {
 }
 
 #[test]
+fn if块与else() {
+    let mut it = interp();
+    it.scripts.insert(
+        "if.ks".into(),
+        crate::lexer::parse_script(
+            "*start\nset f.a = 2\nif f.a > 5\nn 大\nelse\nn 小\nendif\nn 之后\n",
+        )
+        .unwrap(),
+    );
+    // 块配对表由 load 建立；测试直接插入脚本时手动建立
+    let (blocks, elses) = crate::interp::blocks::pair(&it.scripts["if.ks"]).unwrap();
+    it.blocks.insert("if.ks".into(), blocks);
+    it.else_targets.insert("if.ks".into(), elses);
+    it.labels.insert(("if.ks".into(), "start".into()), 0);
+    it.start("if.ks", None).unwrap();
+    assert_eq!(it.state, crate::interp::RunState::WaitClick);
+    assert_eq!(it.pending_text.as_deref(), Some("小"));
+    it.click().unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("之后"));
+}
+
+#[test]
+fn if块无else且条件成立() {
+    let mut it = interp();
+    it.scripts.insert(
+        "if.ks".into(),
+        crate::lexer::parse_script("*start\nset f.a = 9\nif f.a == 9\nn 命中\nendif\nn 之后\n")
+            .unwrap(),
+    );
+    let (blocks, elses) = crate::interp::blocks::pair(&it.scripts["if.ks"]).unwrap();
+    it.blocks.insert("if.ks".into(), blocks);
+    it.else_targets.insert("if.ks".into(), elses);
+    it.labels.insert(("if.ks".into(), "start".into()), 0);
+    it.start("if.ks", None).unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("命中"));
+    it.click().unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("之后"));
+}
+
+#[test]
+fn if块嵌套() {
+    let mut it = interp();
+    it.scripts.insert(
+        "if.ks".into(),
+        crate::lexer::parse_script(
+            "*start\nset f.a = 1\nset f.b = 0\nif f.a == 1\nif f.b == 1\nn 内真\nelse\nn 内假\nendif\nn 外真\nelse\nn 外假\nendif\nn 之后\n",
+        )
+        .unwrap(),
+    );
+    let (blocks, elses) = crate::interp::blocks::pair(&it.scripts["if.ks"]).unwrap();
+    it.blocks.insert("if.ks".into(), blocks);
+    it.else_targets.insert("if.ks".into(), elses);
+    it.labels.insert(("if.ks".into(), "start".into()), 0);
+    it.start("if.ks", None).unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("内假"));
+    it.click().unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("外真"));
+    it.click().unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("之后"));
+}
+
+#[test]
+fn if单行表达式条件() {
+    let mut it = interp();
+    it.scripts.insert(
+        "one.ks".into(),
+        crate::lexer::parse_script("*start\nset f.a = 3\nif f.a * 2 > 5 *hit\nn 未命中\njump *end\n*hit\nn 命中\n*end\nn 之后\n")
+            .unwrap(),
+    );
+    let (blocks, elses) = crate::interp::blocks::pair(&it.scripts["one.ks"]).unwrap();
+    it.blocks.insert("one.ks".into(), blocks);
+    it.else_targets.insert("one.ks".into(), elses);
+    it.labels.insert(("one.ks".into(), "start".into()), 0);
+    it.labels.insert(("one.ks".into(), "hit".into()), 5);
+    it.labels.insert(("one.ks".into(), "end".into()), 7);
+    it.start("one.ks", None).unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("命中"));
+}
+
+#[test]
+fn call与return回到下一行() {
+    let mut it = interp();
+    it.scripts.insert(
+        "call.ks".into(),
+        crate::lexer::parse_script(
+            "*start\nset f.a = 0\ncall *sub\nn 返回后\nend\n*sub\nflag f.a +1\nreturn\n",
+        )
+        .unwrap(),
+    );
+    let (blocks, elses) = crate::interp::blocks::pair(&it.scripts["call.ks"]).unwrap();
+    it.blocks.insert("call.ks".into(), blocks);
+    it.else_targets.insert("call.ks".into(), elses);
+    it.labels.insert(("call.ks".into(), "start".into()), 0);
+    it.labels.insert(("call.ks".into(), "sub".into()), 5);
+    it.start("call.ks", None).unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("返回后"));
+    assert_eq!(it.vars.get("f.a"), Some(&crate::vars::Value::Int(1)));
+    it.click().unwrap();
+    assert_eq!(it.state, crate::interp::RunState::Ended);
+}
+
+#[test]
+fn return无call与call递归上限() {
+    let mut it = interp();
+    it.scripts.insert("bad.ks".into(), crate::lexer::parse_script("*start\nreturn\n").unwrap());
+    it.labels.insert(("bad.ks".into(), "start".into()), 0);
+    it.start("bad.ks", None).unwrap_err();
+    assert!(it.error.as_deref().unwrap_or("").contains("return 没有对应的 call"));
+
+    let mut it = interp();
+    it.scripts.insert(
+        "rec.ks".into(),
+        crate::lexer::parse_script("*start\ncall *start\nreturn\n").unwrap(),
+    );
+    it.labels.insert(("rec.ks".into(), "start".into()), 0);
+    let _ = it.start("rec.ks", None);
+    let e = it.error.clone().unwrap_or_default();
+    assert!(e.contains("call 嵌套超过"), "{e}");
+}
+
+#[test]
+fn if块配对错误带行号() {
+    let mut it = interp();
+    it.scripts.insert("bad.ks".into(), crate::lexer::parse_script("if f.a == 1\nn x\n").unwrap());
+    let e = crate::interp::blocks::pair(&it.scripts["bad.ks"]).unwrap_err();
+    assert!(e.contains("缺少 endif"), "{e}");
+    let e =
+        crate::interp::blocks::pair(&crate::lexer::parse_script("else\n").unwrap()).unwrap_err();
+    assert!(e.contains("没有配对的 if"), "{e}");
+}
+
+#[test]
 fn 未知预设位置中文报错带行号() {
     let mut it = interp();
     let e = it

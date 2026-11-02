@@ -53,12 +53,26 @@ pub enum Command {
         file: Option<String>,
         label: String,
     },
+    /// `if 条件 *label`：条件成立时跳到 label（KAG3 单行形态）
     If {
-        var: String,
-        op: String,
-        val: String,
+        cond: String,
         target: String,
     },
+    /// 块起始 `if 条件`：条件不成立跳到 else 之后或 endif 之后
+    /// （跳转目标由 load 阶段的 blocks 表按行下标解析，见 interp::blocks）
+    IfBlock {
+        cond: String,
+    },
+    /// 块中段 `else`：真分支执行到这里直接跳到 endif 之后
+    Else,
+    /// 块结束 `endif`：无操作（占位，保证 if/else 目标可计算）
+    EndIf,
+    /// 调用子程序：压栈后跳转，`return` 回到下一行
+    Call {
+        file: Option<String>,
+        label: String,
+    },
+    Return,
     Choice {
         prompt: String,
         items: Vec<(String, String)>,

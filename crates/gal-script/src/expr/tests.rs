@@ -75,6 +75,64 @@ fn 条件两侧支持表达式() {
 }
 
 #[test]
+fn 括号与优先级() {
+    let vars = v();
+    assert_eq!(eval("(1 + 2) * 3", &vars).unwrap(), Value::Int(9));
+    assert_eq!(eval("2 * (3 + 4) - 1", &vars).unwrap(), Value::Int(13));
+    assert_eq!(eval("((f.a))", &vars).unwrap(), Value::Int(2));
+    assert!(eval("(1 + 2", &vars).unwrap_err().contains("括号未闭合"));
+    assert!(eval("1 + 2)", &vars).unwrap_err().contains("多余内容"));
+    assert!(eval("()", &vars).is_err());
+}
+
+#[test]
+fn 比较与逻辑() {
+    let vars = v();
+    assert_eq!(eval("f.a > 1", &vars).unwrap(), Value::Int(1));
+    assert_eq!(eval("f.a < 1", &vars).unwrap(), Value::Int(0));
+    assert_eq!(eval("f.a == 2 && f.a != 3", &vars).unwrap(), Value::Int(1));
+    assert_eq!(eval("f.a == 1 || f.a == 2", &vars).unwrap(), Value::Int(1));
+    // 与四则的优先级：比较低于算术
+    assert_eq!(eval("f.a + 1 == 3", &vars).unwrap(), Value::Int(1));
+    assert_eq!(eval("(f.a + 1) * 2 >= 6", &vars).unwrap(), Value::Int(1));
+    // 逻辑低于比较
+    assert_eq!(eval("f.a > 1 && f.a < 3", &vars).unwrap(), Value::Int(1));
+    // ?? 高于 &&，便于 `a ?? 0 && b` 这类写法
+    assert_eq!(eval("f.missing ?? 1 && 1", &vars).unwrap(), Value::Int(1));
+    // 字符串等值比较允许，大小比较拒绝
+    assert_eq!(eval("sf.name == '夏'", &vars).unwrap(), Value::Int(1));
+    assert!(eval("sf.name > 'a'", &vars).is_err());
+}
+
+#[test]
+fn 一元与取模() {
+    let vars = v();
+    assert_eq!(eval("!0", &vars).unwrap(), Value::Int(1));
+    assert_eq!(eval("!f.a", &vars).unwrap(), Value::Int(0));
+    assert_eq!(eval("-(1 + 2)", &vars).unwrap(), Value::Int(-3));
+    assert_eq!(eval("10 % 3", &vars).unwrap(), Value::Int(1));
+    assert_eq!(eval("10 % 5", &vars).unwrap(), Value::Int(0));
+    assert!(eval("10 % 0", &vars).is_err());
+    assert!(eval("-sf.name", &vars).is_err());
+    // 未赋值变量参与算术仍按字符串处理（+ 为拼接，- 报错），与既有语义一致
+    assert_eq!(eval("f.blank + 2", &vars).unwrap(), Value::Str("2".into()));
+    assert!(eval("f.blank - 2", &vars).is_err());
+}
+
+#[test]
+fn 短路不求值右侧() {
+    let vars = v();
+    // 右侧除零：短路后不应触发
+    assert_eq!(eval("0 && 1 / 0", &vars).unwrap(), Value::Int(0));
+    assert_eq!(eval("1 || 1 / 0", &vars).unwrap(), Value::Int(1));
+    // 非短路时照常报错
+    assert!(eval("1 && 1 / 0", &vars).is_err());
+    assert!(eval("0 || 1 / 0", &vars).is_err());
+    // 裸词未赋值 = 非空字符串 = 真
+    assert_eq!(eval("nope && 1", &vars).unwrap(), Value::Int(1));
+}
+
+#[test]
 fn 未赋值变量与数字比较按零() {
     let vars = v();
     // 未赋值（空串）vs 数字：按 0，不再报错（剧本可省初始化）

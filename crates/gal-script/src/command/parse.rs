@@ -137,16 +137,26 @@ impl Command {
                 _ => err("jump 用法：jump *label / jump 文件 *label"),
             },
             "if" => match tokens.as_slice() {
-                [v, op, val, t] if ["==", "!=", ">=", "<=", ">", "<"].contains(op) => {
-                    Ok(Command::If {
-                        var: v.to_string(),
-                        op: op.to_string(),
-                        val: val.to_string(),
-                        target: t.trim_start_matches('*').to_string(),
-                    })
+                // 单行形态：`if f.a == 1 *label` / `if f.a + 1 > f.b *next`
+                [.., t] if t.starts_with('*') => {
+                    let cond = tokens[..tokens.len() - 1].join(" ");
+                    if cond.is_empty() {
+                        return err("if 用法：if 条件 *label 或 if 条件 […] ");
+                    }
+                    Ok(Command::If { cond, target: t.trim_start_matches('*').to_string() })
                 }
-                _ => err("if 用法：if 变量 == 值 *label（支持 == != >= <= > <）"),
+                // 块形态：`if 条件` … `[else]` … `endif`
+                _ if !tokens.is_empty() => Ok(Command::IfBlock { cond: rest.trim().to_string() }),
+                _ => err("if 用法：if 条件 *label / if 条件 … endif"),
             },
+            "else" if tokens.is_empty() => Ok(Command::Else),
+            "endif" if tokens.is_empty() => Ok(Command::EndIf),
+            "call" => match tokens.as_slice() {
+                [t] => Ok(call(None, t)),
+                [f, t] => Ok(call(Some(f.to_string()), t)),
+                _ => err("call 用法：call *label / call 文件 *label"),
+            },
+            "return" if tokens.is_empty() => Ok(Command::Return),
             "input" => {
                 let (v, tail) = rest
                     .split_once(' ')
@@ -251,6 +261,10 @@ fn layer_of(l: &str, ctx: &str) -> Result<u8, String> {
 
 fn jump(file: Option<String>, target: &str) -> Command {
     Command::Jump { file, label: target.trim_start_matches('*').into() }
+}
+
+fn call(file: Option<String>, target: &str) -> Command {
+    Command::Call { file, label: target.trim_start_matches('*').into() }
 }
 
 fn num<T: std::str::FromStr>(s: impl AsRef<str>) -> Result<T, String> {

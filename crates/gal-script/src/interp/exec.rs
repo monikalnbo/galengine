@@ -102,12 +102,70 @@ impl Interp {
                 self.vars.set(&var, v);
                 Ok(false)
             }
-            Command::If { var, op, val, target } => {
-                let hit = crate::expr::eval_cond(&var, &op, &val, &self.vars)
+            Command::If { cond, target } => {
+                let hit = crate::expr::eval(&cond, &self.vars)
+                    .map(|v| crate::expr::truthy(&v))
                     .map_err(|e| format!("{ctx}：if 条件错误：{e}"))?;
                 if hit {
                     self.jump_label(&target)?;
                 }
+                Ok(false)
+            }
+            Command::IfBlock { cond } => {
+                let hit = crate::expr::eval(&cond, &self.vars)
+                    .map(|v| crate::expr::truthy(&v))
+                    .map_err(|e| format!("{ctx}：if 条件错误：{e}"))?;
+                if !hit {
+                    // 假分支：进入 else 分支首行；没有 else 则跳到 endif 之后
+                    let (else_at, end) = self
+                        .blocks_of(&self.file)
+                        .and_then(|b| b.get(&(self.pc - 1)).copied())
+                        .ok_or_else(|| format!("{ctx}：if 块配对表缺失（疑似剧本热更新）"))?;
+                    self.pc = match else_at {
+                        Some(e) => e + 1,
+                        None => end + 1,
+                    };
+                }
+                Ok(false)
+            }
+            Command::Else => {
+                // 能走到 else 说明真分支已执行完：跳过剩余分支
+                let end = self
+                    .else_target_of(&self.file, self.pc - 1)
+                    .ok_or_else(|| format!("{ctx}：else 配对表缺失"))?;
+                self.pc = end + 1;
+                Ok(false)
+            }
+            Command::EndIf => Ok(false),
+            Command::Call { file, label } => {
+                if self.call_stack.len() >= super::MAX_CALL_DEPTH {
+                    return Err(format!(
+                        "{ctx}：call 嵌套超过 {} 层（疑似递归子程序）",
+                        super::MAX_CALL_DEPTH
+                    ));
+                }
+                let target_file = file.unwrap_or_else(|| self.file.clone());
+                self.load(&target_file)?;
+                let key = (target_file.clone(), label.clone());
+                let pc = *self
+                    .labels
+                    .get(&key)
+                    .ok_or_else(|| format!("{ctx}：调用目标不存在：{} *{}", target_file, label))?;
+                // 压栈：返回时回到 call 的下一行
+                let ret_file = self.file.clone();
+                let ret_pc = self.pc;
+                self.call_stack.push((ret_file, ret_pc));
+                self.file = target_file;
+                self.pc = pc;
+                Ok(false)
+            }
+            Command::Return => {
+                let (file, pc) = self
+                    .call_stack
+                    .pop()
+                    .ok_or_else(|| format!("{ctx}：return 没有对应的 call"))?;
+                self.file = file;
+                self.pc = pc;
                 Ok(false)
             }
             Command::Jump { file, label } => {

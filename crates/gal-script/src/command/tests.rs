@@ -106,6 +106,50 @@ fn char位置名解析() {
 }
 
 #[test]
+fn if的单行与块形态() {
+    // 单行：条件表达式原样保存，目标去星号
+    match cmd("if", "f.a + 1 > 3 *next").unwrap() {
+        Command::If { cond, target } => {
+            assert_eq!(cond, "f.a + 1 > 3");
+            assert_eq!(target, "next");
+        }
+        _ => panic!("应解析为单行 if"),
+    }
+    // 旧写法 `if f.a == 1 *next` 走同一条路径
+    match cmd("if", "f.a == 1 *next").unwrap() {
+        Command::If { cond, target } => {
+            assert_eq!((cond.as_str(), target.as_str()), ("f.a == 1", "next"));
+        }
+        _ => panic!(),
+    }
+    // 无 *目标 = 块形态
+    assert!(
+        matches!(cmd("if", "f.a == 1").unwrap(), Command::IfBlock { ref cond } if cond == "f.a == 1")
+    );
+    assert!(matches!(cmd("else", "").unwrap(), Command::Else));
+    assert!(matches!(cmd("endif", "").unwrap(), Command::EndIf));
+    assert!(cmd("if", "").is_err());
+    assert!(cmd("else", "x").is_err());
+}
+
+#[test]
+fn call与return解析() {
+    match cmd("call", "*sub").unwrap() {
+        Command::Call { file: None, label } => assert_eq!(label, "sub"),
+        _ => panic!(),
+    }
+    match cmd("call", "other.ks *sub").unwrap() {
+        Command::Call { file: Some(f), label } => {
+            assert_eq!((f.as_str(), label.as_str()), ("other.ks", "sub"));
+        }
+        _ => panic!(),
+    }
+    assert!(matches!(cmd("return", "").unwrap(), Command::Return));
+    assert!(cmd("call", "").is_err());
+    assert!(cmd("return", "x").is_err());
+}
+
+#[test]
 fn 演示剧本start_ks全量解析通过() {
     let script = include_str!("../../../../template/game/data/scenario/start.ks");
     let lines = crate::lexer::parse_script(script).expect("词法解析通过");

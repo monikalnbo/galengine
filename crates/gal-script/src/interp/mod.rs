@@ -2,7 +2,8 @@
 //! 由 app 每帧 tick/click 驱动。演出类指令（音频/meta/越界/窗口/关机/桌面）
 //! 不在此执行，进 SysEvent 队列由 L1 systems 层消费——L2 不碰平台。
 
-mod exec;
+mod blocks;
+pub(crate) mod exec;
 mod history;
 mod types;
 
@@ -17,16 +18,25 @@ use crate::command::Command;
 use crate::lexer::{self, Line, LineKind};
 use crate::stage::{Stage, StageSnap};
 use crate::vars::{Value, Vars};
+use blocks::{Blocks, ElseTargets};
 use gal_config as config;
 use gal_config::sprites::{SpritePos, SpritesCfg};
 use gal_text::writer::{ClickResult, Typewriter};
 
 /// 连续执行保护上限（防 label 死循环）
 const MAX_STEPS: usize = 10_000;
+/// call 嵌套上限（防子程序自递归撑爆内存）
+const MAX_CALL_DEPTH: usize = 64;
 
 pub struct Interp {
     pub(crate) scripts: HashMap<String, Vec<Line>>,
     pub(crate) labels: HashMap<(String, String), usize>,
+    /// if/else/endif 块配对（按文件）
+    pub(crate) blocks: HashMap<String, Blocks>,
+    /// else 行 → endif 行（按文件）
+    pub(crate) else_targets: HashMap<String, ElseTargets>,
+    /// call 调用栈：(文件, 返回位置)。只存运行期，不进存档
+    pub(crate) call_stack: Vec<(String, usize)>,
     pub(crate) file: String,
     pub(crate) pc: usize,
     /// 当前等待点所在行（存档恢复用：重执行该行即恢复画面+台词）
@@ -61,6 +71,9 @@ impl Interp {
         Self {
             scripts: HashMap::new(),
             labels: HashMap::new(),
+            blocks: HashMap::new(),
+            else_targets: HashMap::new(),
+            call_stack: Vec::new(),
             file: String::new(),
             pc: 0,
             stop_line: None,
@@ -112,11 +125,15 @@ impl Interp {
             .map_err(|e| format!("剧本文件读取失败：{path}（{e}）"))?;
         let src = src.trim_start_matches('\u{feff}'); // 剥 BOM
         let lines = lexer::parse_script(src).map_err(|e| format!("{file}：{e}"))?;
+        // if/else/endif 配对在加载时一次算好，执行期只查表
+        let (blocks, else_targets) = blocks::pair(&lines).map_err(|e| format!("{file}：{e}"))?;
         for (i, line) in lines.iter().enumerate() {
             if let LineKind::Label(label) = &line.kind {
                 self.labels.insert((file.to_string(), label.clone()), i);
             }
         }
+        self.blocks.insert(file.to_string(), blocks);
+        self.else_targets.insert(file.to_string(), else_targets);
         self.scripts.insert(file.to_string(), lines);
         Ok(())
     }
@@ -126,6 +143,7 @@ impl Interp {
         self.load(file)?;
         self.file = file.to_string();
         self.pc = 0;
+        self.call_stack.clear();
         if let Some(label) = label {
             let key = (file.to_string(), label.trim_start_matches('*').to_string());
             self.pc =
@@ -151,6 +169,8 @@ impl Interp {
         self.tw.clear();
         self.cur_name = None;
         self.pending_text = None;
+        // call 栈是运行期状态，读档后从栈底重新开始
+        self.call_stack.clear();
         self.file = file.to_string();
         self.pc = line;
         self.run_until_wait()
