@@ -4,7 +4,6 @@ meta:
   script_start: "start.ks"
 
 display:
-  window_title: "galengine 奇迹工坊：与引擎精灵的初次邂逅"
   width: 1280
   height: 720
   resizable: true
