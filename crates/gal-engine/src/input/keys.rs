@@ -58,7 +58,7 @@ pub fn overlay_move(g: &mut Game, k: Keycode, canvas: &mut Canvas<Window>) {
         return;
     }
     let cur = match &g.overlay {
-        Overlay::Menu { sel } | Overlay::Save { sel, .. } | Overlay::Title { sel } => *sel,
+        Overlay::Menu { sel } | Overlay::Save { sel, .. } | Overlay::Title { sel, .. } => *sel,
         _ => 0,
     };
     let cols = match g.overlay {
@@ -73,7 +73,9 @@ pub fn overlay_move(g: &mut Game, k: Keycode, canvas: &mut Canvas<Window>) {
         _ => cur,
     };
     match &mut g.overlay {
-        Overlay::Menu { sel } | Overlay::Save { sel, .. } | Overlay::Title { sel } => *sel = next,
+        Overlay::Menu { sel } | Overlay::Save { sel, .. } | Overlay::Title { sel, .. } => {
+            *sel = next
+        }
         _ => {}
     }
 }

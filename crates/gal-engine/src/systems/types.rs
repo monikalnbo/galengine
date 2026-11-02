@@ -38,4 +38,6 @@ pub struct Systems {
     pub rest: Option<RestSt>,
     /// 中文提示 toast（拒读指纹/平台错误等）
     pub msg: Option<Msg>,
+    /// 左下角小字提示（语音被 SE 打断等，1.5s 自动消失）
+    pub voice_hint: Option<Msg>,
 }

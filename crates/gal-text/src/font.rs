@@ -125,6 +125,26 @@ impl<'a> FontBook<'a> {
         true
     }
 
+    /// 运行期追加一个字体族（玩家加载系统字体）；返回新族名。
+    /// 重复/坏文件/不渲染中文 → None（静默跳过，不打断游戏）。
+    pub fn add_family(&mut self, path: &str, label: &str) -> Option<String> {
+        if self.families.len() >= 32 {
+            return None;
+        }
+        let src = resolve(self.ttf, path).ok().flatten()?;
+        if self.families.iter().any(|f| f.path == src.path && f.index == src.index) {
+            return None;
+        }
+        let name = if label.trim().is_empty() {
+            face_name(self.ttf, &src).ok()?
+        } else {
+            label.to_string()
+        };
+        self.families.push(src);
+        self.names.push(name.clone());
+        Some(name)
+    }
+
     pub fn font(&mut self, size: u16) -> Result<&Font<'a, 'static>, String> {
         let key = (self.cur, size);
         if !self.fonts.contains_key(&key) {
@@ -178,6 +198,17 @@ impl<'a> FontBook<'a> {
             self.textures.insert(key.clone(), tex);
         }
         Ok(self.textures.get(&key).unwrap())
+    }
+
+    /// 文本像素宽度（按当前字体族与字号；用于 ruby 基底/注音居中）
+    pub fn text_width(&mut self, size: u16, text: &str) -> u32 {
+        if text.is_empty() {
+            return 0;
+        }
+        let Ok(font) = self.font(size) else { return 0 };
+        font.size_of(text).map(|(w, _)| w).unwrap_or_else(|_| {
+            text.chars().map(|c| font.size_of_char(c).map(|(w, _)| w).unwrap_or(0)).sum()
+        })
     }
 
     /// 计算单行前 N 个字符的像素宽度（打字机裁剪绘制用）

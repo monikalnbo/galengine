@@ -45,6 +45,8 @@ game/data/
 | `n 台词` | 旁白（无名字牌） |
 | `name 名字 台词` | 对话；名字颜色查 game.yaml 的 name_colors |
 | `{hero}` / `{you}` | 运行时替换 → f.heroName / sf.playerName（台词、desktop_write、window_fx title 均生效） |
+| `[基底]^(注音)` | 注音（ruby）：基底 1-8 字、注音 1-16 字，整体不可断行，宽按二者较大值；**仅对话框正文与回卷**，剧本里其它位置按普通文本处理；无 `^` 的 `[...]` 仍是普通字符 |
+| `{@键}` / `{@键\|兜底}` | 语言包查表（见 §5 `lang`）；未写宏的旧剧本逐字节不变 |
 
 ### 分支与变量
 | 指令 | 说明 |
@@ -223,6 +225,9 @@ ui:
     text_accent: [255, 255, 255]
     border_width: 1
   skin:                        # 可切换皮肤：对话框盒 + 底栏配色（玩家设置里切）
+    dir: skins                 # 主题包目录（相对数据目录）；目录下每个 *.yaml|*.yml
+                               # 可写单套（顶层 name:）或 schemes: 列表，
+                               # 与下面 schemes 按 name 合并（同名后者覆盖）
     schemes:
       - name: 夜色              # 未配置 = 只用这一套内置皮肤
         dialog_fill: [10, 12, 26, 205]
@@ -239,6 +244,8 @@ ui:
     title_extra:               # 名字可自定义，界面代码按名取用
       - image: bgimage/title_glow.png
         rect: [0, 0, 1280, 720]
+        anim: fade:600         # 入场动画（可选）：fade:<ms> / slide:<ms>:<dx,dy> / zoom:<ms>:<倍率>
+                               # 从图层组出现时刻起算，缓出；ms=0 或写错 = 不做动画
       - fill: [0, 0, 0, 120]   # image 为空时纯色层
         rect: [0, 600, 1280, 120]
       - text: "{meta.title}"   # 文字层（支持 {meta.title} 等引用）
@@ -322,6 +329,15 @@ game:
   menu_items: [继续, 存档, 读取存档, CG 鉴赏, 设置, 回到标题, 退出游戏]
   title_items: [开始游戏, 继续游戏, 读取存档, CG 鉴赏, 设置, 退出游戏]
 
+lang:                          # 多语言（剧本/选项/菜单里的 {@键} 查表）
+  dir: lang                    # 语言包目录（相对数据目录）；<code>.yaml 内含 name/code/strings
+  default: ""                  # 默认语言代码（空 = 文件名排序第一套；玩家仍可在设置里切）
+
+tts:                           # 无障碍朗读（玩家设置里可开关/调语速）
+  backend: ""                  # 空=自动探测：sapi / say / espeak-ng / espeak / spd-say
+  rate: 0                      # 首次启动默认语速 -10..10
+  on: false                    # 首次启动是否默认开启朗读
+
 extensions:                    # 拓展声明（见 §2 拓展指令）
   - name: timer_choice         # 倒计时选项
     default_ms: 7000
@@ -343,11 +359,14 @@ Esc →「设置」打开，分页显示，改动**立刻生效并立即写盘**
 | 文字 | 等待标记 ▼ | `sf.waitMarker` | 页满标记开/关 |
 | 文字 | 文字描边 | `sf.outline` | 描边宽度 0-4px |
 | 文字 | 字体 | `sf.fontFamily` | 切到 `text.families` 第 N 项 |
+| 文字 | 语言 | `sf.language` | 0=作者原文，N=语言包第 N 套（立即重排当前台词/选项/菜单） |
+| 文字 | 系统字体 | `savedata/fonts.json` | 扫描系统字体目录并载入（最多 16 族），下次启动自动恢复 |
 | 文字 | 跳过已读 | `sf.skipRead` | 快进只跳已读行 |
 | 显示 | 全屏 | 窗口状态 | 立即切全屏/窗口 |
 | 显示 | 转场动画 | `sf.transOn` | 关=转场直接切图 |
 | 显示 | 界面皮肤 | `sf.skinIndex` | 换 `ui.skin.schemes` 第 N 套 |
 | 音频 | BGM / 音效 / 语音音量 | `sf.volBgm` / `sf.volSe` / `sf.volVoice` | 三通道即时调音量 |
+| 无障碍 | 朗读台词 / 朗读语速 | `sf.ttsOn` / `sf.ttsRate` | 系统朗读当前台词；本机无后端时行标注并自动关闭 |
 | 键位 | 8 个动作重绑 | `sf.keymap.<动作>` | 按键即绑，Esc 取消 |
 | 其他 | 恢复默认设置 / 打赏 | — | 重置全部玩家值 / 打开 donation_url |
 

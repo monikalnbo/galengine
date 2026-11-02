@@ -39,6 +39,23 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
         .map(|f| gal_text::font::Family { name: f.name.clone(), path: f.path.clone() })
         .collect();
     let mut fonts = FontBook::new(&ttf, &creator, &conf.fonts, &families)?;
+    // 玩家加载过的系统字体（savedata/fonts.json）：启动即恢复，坏路径静默跳过
+    {
+        let path = format!("{}/fonts.json", conf.save.dir);
+        let mut restored = 0;
+        for p in load_sys_fonts(&path) {
+            let name = std::path::Path::new(&p)
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| p.clone());
+            if fonts.add_family(&p, &name).is_some() {
+                restored += 1;
+            }
+        }
+        if restored > 0 && gal_script::interp::dbg() {
+            eprintln!("[dbg font] 启动恢复系统字体 {restored} 个（fonts.json）");
+        }
+    }
     let mut thumbs = gal_ui::savemenu::ThumbCache::new(&creator);
 
     // 全局变量（sf.*）加载 + 首次启动种子默认名
@@ -69,9 +86,13 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
     let mut exts = crate::exts::registry::build(&g.conf.extensions); // yaml 内置拓展
     exts.extend(boot.extensions); // 程序化注入（Boot API）
     g.exts = exts;
+    // 验收：无头环境下模拟设置面板「载入系统字体」
+    if env::var("ES_SCAN_FONTS").is_ok() {
+        g.scan_sys_fonts = true;
+    }
     g.start_script = script;
     g.start_label = label;
-    g.overlay = gal_ui::overlay::Overlay::Title { sel: 0 };
+    g.overlay = gal_ui::overlay::Overlay::Title { sel: 0, t: 0.0 };
     let autoclick_ms: f32 =
         env::var("ES_DEBUG_AUTOCLICK_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(0.0);
     let mut click_acc = 0.0f32;
@@ -83,6 +104,8 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
     let budget = Duration::from_millis(FRAME_BUDGET_MS);
     let mut last = Instant::now();
 
+    let perf = std::env::var("ES_PERF").ok();
+    let (mut perf_frames, mut perf_sum, mut perf_max) = (0u32, 0f64, 0f64);
     'running: loop {
         let t0 = Instant::now();
         let dt = t0.duration_since(last).as_secs_f32() * 1000.0;
@@ -126,13 +149,23 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
             click_acc += dt;
             if click_acc >= autoclick_ms {
                 click_acc = 0.0;
-                crate::input::auto_step(&mut g, &mut thumbs)?;
+                crate::input::auto_step(&mut g, &mut thumbs, &mut canvas)?;
             }
         }
 
         g.tick(dt);
         g.interp.tick(dt);
         g.interp.apply_pending(&mut fonts, &g.style);
+        // 无障碍朗读：当前台词出现即朗读（同句去重；无后端静默）
+        if g.tts.enabled && g.started && g.interp.state == gal_script::interp::RunState::WaitClick {
+            let line = g.interp.cur_text().to_string();
+            g.tts.speak(&line);
+        }
+        g.tts.tick();
+        if g.scan_sys_fonts {
+            g.scan_sys_fonts = false;
+            load_scan_sys_fonts(&mut g, &mut fonts);
+        }
         if g.style_dirty {
             g.interp.relayout(&mut fonts, &g.style);
             g.style_dirty = false;
@@ -228,11 +261,26 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
         )?;
 
         let spent = t0.elapsed();
+        if perf.is_some() {
+            // ES_PERF：帧耗时统计（报告里的性能证据）
+            let ms = t0.elapsed().as_secs_f64() * 1000.0;
+            perf_frames += 1;
+            perf_sum += ms;
+            perf_max = perf_max.max(ms);
+        }
         if spent < budget {
             std::thread::sleep(budget - spent);
         }
     }
 
+    if perf_frames > 0 {
+        eprintln!(
+            "[perf] 帧数 {perf_frames} 平均 {:.2}ms 最大 {:.2}ms（约 {:.0} FPS）",
+            perf_sum / perf_frames as f64,
+            perf_max,
+            1000.0 / (perf_sum / perf_frames as f64)
+        );
+    }
     g.interp.vars.save_global(&global_path)?;
     Ok(())
 }
@@ -260,15 +308,32 @@ fn maintain_input_ui(g: &mut Game) {
 
 /// 玩家设置对账：字体族索引变化 → 切族并清缓存；字号/行距/皮肤/转场变化 → 重算
 fn poll_player_settings(g: &mut Game, fonts: &mut FontBook) {
-    let int = |k: &str| g.interp.vars.sf.get(k).map(|v| v.as_i64());
+    // 快照 sf.*（几十项，克隆开销可忽略）避免闭包长期借用 g 与下面的可变调用冲突
+    let sf = g.interp.vars.sf.clone();
+    let int = |k: &str| sf.get(k).map(|v| v.as_i64());
     let want_font = int("fontFamily").unwrap_or(0).max(0) as usize;
     if want_font != fonts.family_index() && want_font < fonts.family_names().len() {
         fonts.set_family(want_font);
         g.style_dirty = true;
     }
     g.interp.trans_enabled = int("transOn").map(|v| v != 0).unwrap_or(true);
+    // 语言/朗读：脚本或设置改了 sf.* 都走同一条对账（值变才动）
+    let tts_on = int("ttsOn");
+    let tts_rate = int("ttsRate");
+    let lang_now = crate::systems::lang_for(&g.langs, &g.interp.vars);
+    if lang_now.code != g.lang.code || g.interp.lang != g.lang.strings {
+        g.apply_lang();
+    }
+    let want_tts = tts_on.map(|v| v == 1).unwrap_or(g.tts.enabled) && g.tts.backend.is_some();
+    if want_tts != g.tts.enabled {
+        g.tts.enabled = want_tts;
+        if !want_tts {
+            g.tts.stop();
+        }
+    }
+    g.tts.rate = tts_rate.unwrap_or(g.tts.rate as i64).clamp(-10, 10) as i32;
     // 字号/行距/等待标记/皮肤：与当前样式不同才重算（重算会触发台词重排）
-    let want = crate::systems::compose_style(&g.conf, None, &g.interp.vars);
+    let want = crate::systems::compose_style(&g.conf, &g.skins, None, &g.interp.vars);
     let changed = want.font_size != g.style.font_size
         || want.line_spacing != g.style.line_spacing
         || want.wait_marker != g.style.wait_marker
@@ -289,7 +354,7 @@ fn poll_player_settings(g: &mut Game, fonts: &mut FontBook) {
         }
         g.style = want;
         let idx = int("skinIndex").unwrap_or(0).max(0) as usize;
-        g.skin = g.conf.ui.skin.at(idx);
+        g.skin = g.skins.get(idx).cloned().unwrap_or_else(|| g.skins[0].clone());
         g.style_dirty = true;
     }
 }
@@ -311,4 +376,65 @@ fn make_canvas(
     };
     canvas.window_mut().set_resizable(resizable);
     Ok(canvas)
+}
+
+/// savedata/fonts.json：玩家运行期加载过的系统字体路径
+fn load_sys_fonts(path: &str) -> Vec<String> {
+    let Ok(text) = std::fs::read_to_string(path) else { return Vec::new() };
+    serde_json::from_str::<serde_json::Value>(&text)
+        .ok()
+        .and_then(|v| v.get("fonts").cloned())
+        .and_then(|v| serde_json::from_value::<Vec<String>>(v).ok())
+        .unwrap_or_default()
+}
+
+fn save_sys_fonts(path: &str, list: &[String]) {
+    let obj = serde_json::json!({ "fonts": list });
+    if let Some(dir) = std::path::Path::new(path).parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    match serde_json::to_string_pretty(&obj) {
+        Ok(s) => {
+            if let Err(e) = std::fs::write(path, s) {
+                eprintln!("[font] fonts.json 写入失败：{e}");
+            }
+        }
+        Err(e) => eprintln!("[font] fonts.json 序列化失败：{e}"),
+    }
+}
+
+/// 设置面板「载入系统字体」：扫描常见字体目录，新族追加到 FontBook，
+/// 路径存 savedata/fonts.json（重启仍在），并切到第一个新族。
+fn load_scan_sys_fonts(g: &mut Game, fonts: &mut FontBook) {
+    let path = format!("{}/fonts.json", g.conf.save.dir);
+    let mut list = load_sys_fonts(&path);
+    let before = fonts.family_names().len();
+    'outer: for dir in gal_platform::font_dirs() {
+        for p in gal_platform::list_font_files(&dir) {
+            if fonts.family_names().len() >= before + 16 {
+                break 'outer;
+            }
+            let name = std::path::Path::new(&p)
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| p.clone());
+            if fonts.add_family(&p, &name).is_some() {
+                list.push(p);
+            }
+        }
+    }
+    let after = fonts.family_names().len();
+    if after > before {
+        list.dedup();
+        save_sys_fonts(&path, &list);
+        // 切到第一个新载入的族，玩家立刻看到效果
+        g.interp.vars.sf.insert("fontFamily".into(), Value::Int(before as i64));
+        fonts.set_family(before);
+        g.font_families = fonts.family_names().to_vec();
+        g.style_dirty = true;
+        g.msg(format!("已载入 {} 个系统字体（字体行可切换）", after - before));
+        eprintln!("[dbg font] 载入系统字体 {} 个（总 {} 族）", after - before, after);
+    } else {
+        g.msg("没找到可用的系统字体");
+    }
 }

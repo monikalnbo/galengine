@@ -42,6 +42,10 @@ pub fn draw(
     evolve: &str,
     sel: usize,
     now_ms: f32,
+    // 进入标题画面后的累计毫秒（图层入场动画起点；不影响呼吸提示）
+    enter_ms: f32,
+    // 语言包键表（标题菜单文字 `{@键}` 替换；空 = 原文）
+    lang: &std::collections::HashMap<String, String>,
 ) -> Result<(), String> {
     canvas.set_blend_mode(BlendMode::Blend);
     let t = &conf.ui.title;
@@ -49,7 +53,7 @@ pub fn draw(
     // 背景+标题文字：YAML 图层定义优先
     let custom = conf.ui.layers.get("title_screen");
     match custom.filter(|v| !v.is_empty()) {
-        Some(defs) => layers::draw_layers(canvas, fonts, bank, conf, defs, vars)?,
+        Some(defs) => layers::draw_layers(canvas, fonts, bank, conf, defs, vars, now_ms, enter_ms)?,
         None => fallback(canvas, fonts, bank, conf)?,
     }
 
@@ -92,16 +96,11 @@ pub fn draw(
         )?;
     }
 
-    menu::draw(
-        canvas,
-        fonts,
-        &conf.ui.menu,
-        &conf.ui.button,
-        &crate::overlay::title_items(conf),
-        sel,
-        t.menu_top_y,
-        false,
-    )?;
+    let items: Vec<String> = crate::overlay::title_items(conf)
+        .iter()
+        .map(|t| if lang.is_empty() { t.clone() } else { gal_config::lang::subst(t, lang) })
+        .collect();
+    menu::draw(canvas, fonts, &conf.ui.menu, &conf.ui.button, &items, sel, t.menu_top_y, false)?;
     Ok(())
 }
 

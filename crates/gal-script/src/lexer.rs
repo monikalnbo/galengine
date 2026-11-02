@@ -35,7 +35,8 @@ pub fn parse_script(src: &str) -> Result<Vec<Line>, String> {
                 }
                 out.push(Line { no: no0, kind: LineKind::Choice { prompt, items } });
             } else {
-                match t.split_once('|') {
+                // 从右取 `|*label`：选项文本里可以含 `{@键|兜底}` 的竖线
+                match t.rsplit_once('|') {
                     Some((text, target)) if target.starts_with('*') => {
                         items.push((text.trim().to_string(), target.trim().to_string()));
                     }

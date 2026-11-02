@@ -26,6 +26,8 @@ pub struct Audio {
     ducked: bool,
     /// BGM 切换淡入时长（作者 audio.fade_ms）
     fade_ms: u32,
+    /// 语音被 SE 打断的提示（引擎取走后显示给小字；None = 无）
+    interrupted: Option<String>,
     bgm_dir: String,
     se_dir: String,
     voice_dir: String,
@@ -56,6 +58,7 @@ impl Audio {
             fading_music: None,
             chunks: HashMap::new(),
             voice: None,
+            interrupted: None,
             bgm_vol: conf.audio.bgm_volume,
             se_vol: conf.audio.se_volume,
             voice_vol: conf.voice.volume,
@@ -167,6 +170,10 @@ impl Audio {
             } else {
                 1.0
             };
+            // SE 占用全部通道 → 正在播的语音被顶掉，玩家容易困惑；记一笔提示
+            if self.voice_playing() && self.voice.as_ref().is_some_and(|(k, _)| k != name) {
+                self.interrupted = Some(name.to_string());
+            }
             if let Some(c) = self.chunks.get_mut(name) {
                 c.set_volume((self.se_vol.clamp(0, 100) as f32 * duck) as i32 * 128 / 100);
                 let _ = Channel::all().play(c, 0);
@@ -196,6 +203,11 @@ impl Audio {
             let _ = VOICE_CHANNEL.play(c, 0);
             self.apply_volumes(); // 立即压低其它通道
         }
+    }
+
+    /// 取走「语音被 SE 打断」事件（每帧调用；一次事件只报一次）
+    pub fn take_interrupted(&mut self) -> Option<String> {
+        self.interrupted.take()
     }
 
     pub fn stop_voice(&mut self) {

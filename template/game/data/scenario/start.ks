@@ -15,10 +15,10 @@ name ？？？ 信号波长确认，神经链路连接完毕！
 
 char 0 alice_normal center
 name 艾莉丝 呼，太好了！连接成功！
-name 艾莉丝 初次见面！我是 galengine 视觉小说引擎的向导精灵——艾莉丝（Alice）！
+name 艾莉丝 初次见面！我是 galengine 视觉小说引擎的向导精灵——[艾莉丝]^(アリス)（Alice）！
 
 # 【第一幕：随心所欲的世界构建（背景与转场）】
-name 艾莉丝 欢迎来到 galengine 的互动演示空间！
+name 艾莉丝 {@hero.welcome|欢迎来到 galengine 的互动演示空间！}
 name 艾莉丝 你现在看到的这片浩瀚星海，其实只用了一行纯文本指令哦。
 name 艾莉丝 就像这样——只需要输入「bg school 1000」……
 name 艾莉丝 看好咯，我要施展场景变换的魔法啦！

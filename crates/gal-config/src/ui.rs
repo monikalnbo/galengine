@@ -248,6 +248,7 @@ pub struct LayerDef {
     pub font_size: Option<u16>,
     /// 文字颜色 RGB
     pub color: Option<[u8; 3]>,
-    /// 动画（可选：fade_in_ms / slide_in 等，后续拓展）
+    /// 入场动画：`fade:<ms>` / `slide:<ms>:<dx,dy>` / `zoom:<ms>:<起倍率>`
+    /// （ms 为 0 或缺省 = 直接显示；见 gal-ui/src/layers.rs 的时间轴）
     pub anim: Option<String>,
 }

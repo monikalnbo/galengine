@@ -48,11 +48,15 @@ pub struct SettingRow {
     pub kind: SettingKind,
 }
 
-/// 运行期可选项（字体族实际可用名单 / 皮肤名单）
+/// 运行期可选项（字体族实际可用名单 / 皮肤名单 / 语言包 / 朗读后端）
 #[derive(Clone, Default)]
 pub struct UiEnv {
     pub families: Vec<String>,
     pub skins: Vec<String>,
+    /// 语言包显示名（空 = 无多语言，不显示该行）
+    pub languages: Vec<String>,
+    /// 朗读后端是否可用（false = 行灰显 + 提示「本机没有可用的朗读后端」）
+    pub tts_available: bool,
 }
 
 /// 设置上下文（所有值经此读写；apply 统一写回引擎与 sf.*）
@@ -77,6 +81,14 @@ pub struct SettingsCtx {
     pub skin: i64,
     /// 字体族下标（FontBook 名单）
     pub family: i64,
+    /// 多语言下标（0 = 作者原文；下标 = lang 包顺序 + 1）
+    pub language: i64,
+    /// 无障碍朗读开关
+    pub tts: bool,
+    /// 朗读语速（相对 -10..10）
+    pub tts_rate: i64,
+    /// 「载入系统字体」动作已请求（引擎下一帧执行后清掉）
+    pub scan_sys_fonts: bool,
     /// 键位：动作 → 设置面板展示串
     pub keys: Vec<(String, String)>,
 }
@@ -100,6 +112,10 @@ impl SettingsCtx {
             trans_on: true,
             skin: 0,
             family: 0,
+            language: 0,
+            tts: false,
+            tts_rate: 0,
+            scan_sys_fonts: false,
             keys: Vec::new(),
         }
     }
@@ -139,6 +155,15 @@ impl SettingsCtx {
         }
         if let Some(v) = get("fontFamily") {
             c.family = v;
+        }
+        if let Some(v) = get("language") {
+            c.language = v;
+        }
+        if let Some(v) = get("ttsOn") {
+            c.tts = v == 1;
+        }
+        if let Some(v) = get("ttsRate") {
+            c.tts_rate = v;
         }
         if let Some(v) = get("skipRead") {
             c.skip_read = v == 1;
@@ -268,6 +293,28 @@ pub fn rows(conf: &Config, env: &UiEnv) -> Vec<SettingRow> {
         ),
         row(
             "文字",
+            "语言",
+            SettingKind::Enum {
+                labels: if env.languages.is_empty() {
+                    vec!["作者原文".into()]
+                } else {
+                    std::iter::once("作者原文".to_string()).chain(env.languages.clone()).collect()
+                },
+                get: |c| c.language,
+                set: |c, v| c.language = v,
+            },
+        ),
+        row(
+            "文字",
+            "系统字体",
+            SettingKind::Action {
+                label: "载入…".into(),
+                // 真加载在主循环（需要 FontBook）：置标记，下一帧扫描系统字体目录
+                run: |c, _conf| c.scan_sys_fonts = true,
+            },
+        ),
+        row(
+            "文字",
             "跳过已读",
             SettingKind::Toggle { get: |c| c.skip_read, set: |c, v| c.skip_read = v },
         ),
@@ -325,6 +372,32 @@ pub fn rows(conf: &Config, env: &UiEnv) -> Vec<SettingRow> {
                 get: |c| c.voice_vol,
                 set: |c, v| c.voice_vol = v,
                 fmt: |v| format!("{v}"),
+            },
+        ),
+        row(
+            "无障碍",
+            if env.tts_available {
+                "朗读台词"
+            } else {
+                "朗读台词（本机无可用后端）"
+            },
+            SettingKind::Toggle { get: |c| c.tts, set: |c, v| c.tts = v },
+        ),
+        row(
+            "无障碍",
+            "朗读语速",
+            SettingKind::Slider {
+                min: -10,
+                max: 10,
+                get: |c| c.tts_rate,
+                set: |c, v| c.tts_rate = v,
+                fmt: |v| {
+                    if v == 0 {
+                        "标准".into()
+                    } else {
+                        format!("{v:+}")
+                    }
+                },
             },
         ),
     ];
@@ -399,7 +472,8 @@ mod tests {
 
     #[test]
     fn 行列表含全部组且键位与动作表一致() {
-        let env = UiEnv { families: vec![], skins: vec![] };
+        let env =
+            UiEnv { families: vec![], skins: vec![], languages: vec![], tts_available: false };
         let rows = rows(&conf(), &env);
         let keys = rows.iter().filter(|r| r.group == "键位").count();
         assert_eq!(keys, ACTIONS.len());

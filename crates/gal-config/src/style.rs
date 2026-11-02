@@ -32,6 +32,10 @@ pub struct DialogStyle {
     pub line_spacing: i32,
     /// 页满「▼」标记
     pub wait_marker: bool,
+    /// ruby 注音字号（px）
+    pub ruby_size: u16,
+    /// 已读文字色（None = 不区分已读）
+    pub read_color: Option<[u8; 3]>,
 }
 
 impl DialogStyle {
@@ -67,6 +71,8 @@ impl DialogStyle {
             shadow_color: text.shadow_color,
             line_spacing,
             wait_marker: text.wait_marker,
+            ruby_size: text.ruby_size(font_size),
+            read_color: text.read_color,
         }
     }
 
@@ -79,6 +85,7 @@ impl DialogStyle {
         if player_spacing > 0 {
             s.line_spacing = player_spacing;
         }
+        s.ruby_size = if s.ruby_size > 0 { s.ruby_size } else { (s.font_size / 2).max(10) };
         s
     }
 

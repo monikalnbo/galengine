@@ -32,7 +32,7 @@ impl Game {
         self.interp.chibi = self.conf.sprites.chibi.iter().cloned().collect();
         self.interp.char_fade_ms = self.conf.sprites.default_fade_ms;
         self.started = false;
-        self.overlay = Overlay::Title { sel: 0 };
+        self.overlay = Overlay::Title { sel: 0, t: 0.0 };
         self.auto = false;
         self.hide_ui = false;
         self.choice_sel = 0;

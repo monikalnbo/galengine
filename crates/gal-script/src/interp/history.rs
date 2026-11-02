@@ -12,7 +12,8 @@ impl Interp {
     /// app 每帧：待显台词交 FontBook 断行；做 {hero}/{you} 替换
     pub fn apply_pending(&mut self, fonts: &mut FontBook, style: &DialogStyle) {
         if let Some(text) = self.pending_text.take() {
-            let text = self.replace_names(&text);
+            self.cur_raw = text.clone();
+            let text = self.localize(&text);
             self.last_text = text.chars().take(18).collect();
             // 推入回卷历史（最多保留 100 条）
             if self.backlog.len() >= 100 {
@@ -31,7 +32,7 @@ impl Interp {
             self.cur_text = text.clone();
             if let Ok(font) = fonts.font(style.font_size) {
                 let max_w = (style.box_rect[2] - 96) as u32;
-                self.tw.set_text(&text, font, max_w, style.lines_per_page);
+                self.tw.set_units(&text, font, max_w, style.lines_per_page, style.ruby_size);
             }
         }
     }
@@ -43,8 +44,11 @@ impl Interp {
         }
         if let Ok(font) = fonts.font(style.font_size) {
             let max_w = (style.box_rect[2] - 96) as u32;
-            let text = self.cur_text.clone();
-            self.tw.set_text(&text, font, max_w, style.lines_per_page);
+            // 原文重新套用姓名/语言（切换语言后当前台词也要跟着变）
+            let raw = self.cur_raw.clone();
+            let text = self.localize(&raw);
+            self.cur_text = text.clone();
+            self.tw.set_units(&text, font, max_w, style.lines_per_page, style.ruby_size);
         }
     }
 
@@ -78,6 +82,16 @@ impl Interp {
                 v.as_str().split(',').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect()
             })
             .unwrap_or_default()
+    }
+
+    /// 姓名宏 + 语言包（`{@键}`）替换：原文未使用宏时逐字节不变
+    pub fn localize(&self, text: &str) -> String {
+        let t = self.replace_names(text);
+        if self.lang.is_empty() {
+            t
+        } else {
+            gal_config::lang::subst(&t, &self.lang)
+        }
     }
 
     /// {hero}->f.heroName、{you}->sf.playerName（空回退配置默认）

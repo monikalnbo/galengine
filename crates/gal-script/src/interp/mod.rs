@@ -54,8 +54,12 @@ pub struct Interp {
     pub(crate) hero_default: String,
     pub(crate) you_default: String,
     pub(crate) pending_text: Option<String>,
-    /// 当前台词全文（样式变更后按新字号/行距重排用）
+    /// 当前台词全文（已做姓名/语言替换；样式变更后按新字号/行距重排用）
     pub(crate) cur_text: String,
+    /// 当前台词原文（未替换；切换语言时重新套用）
+    pub(crate) cur_raw: String,
+    /// 语言包键表（空 = 作者原文；`{@键}` 才替换）
+    pub lang: std::collections::HashMap<String, String>,
     /// 立绘预设位置（game.yaml sprites.positions 注入；默认 left/center/right）
     pub positions: HashMap<String, SpritePos>,
     /// Q版立绘名单（sprites.chibi 注入；在场时背景虚化）
@@ -93,6 +97,8 @@ impl Interp {
             you_default: you_default.into(),
             pending_text: None,
             cur_text: String::new(),
+            cur_raw: String::new(),
+            lang: std::collections::HashMap::new(),
             positions: SpritesCfg::default().positions,
             chibi: std::collections::HashSet::new(),
             char_fade_ms: SpritesCfg::default().default_fade_ms,
@@ -100,6 +106,11 @@ impl Interp {
             error: None,
             trans_enabled: true,
         }
+    }
+
+    /// 当前台词（已替换姓名/语言，朗读与外部读取用）
+    pub fn cur_text(&self) -> &str {
+        &self.cur_text
     }
 
     /// 预读扫描：之后 n 条指令将用到的图片（prefetch 喂料）

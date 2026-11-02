@@ -1,0 +1,12 @@
+# 英文语言包示例：剧本/界面文字里写 {@键}，玩家在「设置 → 语言」切换。
+# 键名自取；缺失的键回落 {@键|兜底} 的兜底，再缺就原样显示。
+name: English
+code: en
+strings:
+  hero.hello: "Hello! I'm Alice, the guide sprite of galengine."
+  hero.welcome: "Welcome to the galengine interactive demo!"
+  menu.start: "Start Game"
+  menu.load: "Load Game"
+  menu.settings: "Settings"
+  menu.gallery: "Gallery"
+  menu.quit: "Quit"

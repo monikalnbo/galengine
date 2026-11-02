@@ -30,6 +30,10 @@ pub struct TextCfg {
     pub shadow_color: [u8; 3],
     /// 页满时是否绘制「▼」等待标记
     pub wait_marker: bool,
+    /// ruby 注音字号（px；0 = 正文一半）
+    pub ruby_size: u16,
+    /// 已读文字色 RGB（null = 不区分已读）
+    pub read_color: Option<[u8; 3]>,
     /// 可切换的字体族列表（空 = 只内置候选链那一种）。
     /// 条目形如 `{"name": "Noto Sans CJK SC", "path": "/usr/share/fonts/..."}`
     pub families: Vec<FontFamilyCfg>,
@@ -44,6 +48,8 @@ impl Default for TextCfg {
             shadow_offset: [0, 0],
             shadow_color: [0, 0, 0],
             wait_marker: true,
+            ruby_size: 0,
+            read_color: None,
             families: Vec::new(),
         }
     }
@@ -58,6 +64,15 @@ pub struct FontFamilyCfg {
 }
 
 impl TextCfg {
+    /// ruby 实际字号（0 = 正文一半，最小 10）
+    pub fn ruby_size(&self, base: u16) -> u16 {
+        if self.ruby_size > 0 {
+            self.ruby_size
+        } else {
+            (base / 2).max(10)
+        }
+    }
+
     /// 实际基准字号：text.size 优先，否则回落对话框字号
     pub fn base_size(&self, dialog_font_size: u16) -> u16 {
         if self.size > 0 {

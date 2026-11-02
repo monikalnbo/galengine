@@ -15,7 +15,9 @@ use gal_ui::settings::{self, SettingKind, SettingsCtx, UiEnv};
 pub fn env(g: &Game) -> UiEnv {
     UiEnv {
         families: g.font_families.clone(),
-        skins: g.conf.ui.skin.effective().iter().map(|s| s.name.clone()).collect(),
+        skins: g.skins.iter().map(|s| s.name.clone()).collect(),
+        languages: g.langs.iter().map(|p| p.name.clone()).collect(),
+        tts_available: g.tts.backend.is_some(),
     }
 }
 
@@ -30,7 +32,7 @@ fn set_sf(g: &mut Game, key: &str, v: i64) {
 }
 
 /// 立即写盘（设置改完就落 global.json，不用等退出）
-fn persist(g: &Game) {
+pub fn persist(g: &Game) {
     let path = format!("{}/global.json", g.conf.save.dir);
     if let Err(e) = g.interp.vars.save_global(&path) {
         eprintln!("[settings] global.json 写入失败：{e}");
@@ -53,6 +55,20 @@ fn apply(g: &mut Game, c: &SettingsCtx, canvas: &mut Canvas<Window>) {
     set_sf(g, "skipRead", c.skip_read as i64);
     set_sf(g, "transOn", c.trans_on as i64);
     set_sf(g, "skinIndex", c.skin);
+    set_sf(g, "language", c.language);
+    set_sf(g, "ttsOn", c.tts as i64);
+    set_sf(g, "ttsRate", c.tts_rate);
+    // 朗读开关/语速即时生效（本机无后端 → 开也静默，设置行已标注）
+    let can_tts = g.tts.backend.is_some();
+    g.tts.enabled = c.tts && can_tts;
+    g.tts.rate = c.tts_rate.clamp(-10, 10) as i32;
+    if !g.tts.enabled {
+        g.tts.stop();
+    }
+    if c.scan_sys_fonts {
+        g.scan_sys_fonts = true;
+    }
+    g.apply_lang();
     g.interp.trans_enabled = c.trans_on;
 
     // 音频三通道

@@ -36,7 +36,7 @@ pub fn confirm_key(
             g.overlay = Overlay::None;
             Ok(true)
         }
-        Overlay::Title { sel } => title_activate(g, sel, thumbs),
+        Overlay::Title { sel, .. } => title_activate(g, sel, thumbs),
         Overlay::Gallery { .. } => {
             gallery_confirm(g);
             Ok(true)

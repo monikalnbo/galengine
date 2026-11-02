@@ -75,7 +75,7 @@ pub fn click(
                     lx,
                     ly,
                 ) {
-                    g.overlay = Overlay::Title { sel: i };
+                    g.overlay = Overlay::Title { sel: i, t: 0.0 };
                     if !activate::title_activate(g, i, thumbs)? {
                         return Ok(false);
                     }

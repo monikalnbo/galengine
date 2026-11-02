@@ -8,6 +8,7 @@ pub mod ext;
 pub mod fonts;
 pub mod game;
 pub mod keymap;
+pub mod lang;
 pub mod paths;
 pub mod save;
 pub mod skin;
@@ -22,6 +23,7 @@ pub use display::*;
 pub use ext::*;
 pub use game::*;
 pub use keymap::*;
+pub use lang::*;
 pub use paths::*;
 pub use save::*;
 pub use skin::*;
@@ -58,6 +60,10 @@ pub struct Config {
     pub voice: VoiceCfg,
     /// 键位映射（作者默认 ← YAML，玩家覆盖 ← global.json）
     pub keymap: KeyMapCfg,
+    /// 多语言包（`lang/<code>.yaml`）
+    pub lang: LangCfg,
+    /// 无障碍朗读（系统命令；不新增依赖）
+    pub tts: TtsCfg,
     /// 拓展声明（见 ext/ 实现）
     pub extensions: Vec<ExtCfg>,
 }

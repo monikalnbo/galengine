@@ -31,6 +31,8 @@ pub enum Overlay {
     },
     Title {
         sel: usize,
+        /// 进入标题画面的累计毫秒（图层入场动画时间轴）
+        t: f32,
     },
 }
 

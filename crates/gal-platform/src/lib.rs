@@ -1,4 +1,6 @@
-//! 平台层：关机/桌面文件/URL打开。Windows 真执行；验收环境仅写日志。
+//! 平台层：关机/桌面文件/URL打开/无障碍朗读。Windows 真执行；验收环境仅写日志。
+
+pub mod tts;
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -98,4 +100,62 @@ pub fn desktop_open_url(url: &str) -> Result<(), String> {
         Command::new("xdg-open").arg(url).spawn().map_err(|e| format!("打开URL失败：{e}"))?;
     }
     Ok(())
+}
+
+// ============================================================
+// 系统字体（运行时加载任意字体；不新增依赖，只做目录枚举）
+// ============================================================
+
+/// 本机常见字体目录（存在的才返回）
+pub fn font_dirs() -> Vec<String> {
+    let mut dirs: Vec<String> = Vec::new();
+    if cfg!(windows) {
+        if let Some(windir) = std::env::var_os("WINDIR") {
+            dirs.push(format!("{}/Fonts", PathBuf::from(windir).display()));
+        }
+        dirs.push("C:/Windows/Fonts".into());
+        if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+            dirs.push(format!("{}/Microsoft/Windows/Fonts", PathBuf::from(local).display()));
+        }
+    } else if cfg!(target_os = "macos") {
+        dirs.push("/System/Library/Fonts".into());
+        dirs.push("/Library/Fonts".into());
+        if let Some(home) = std::env::var_os("HOME") {
+            dirs.push(format!("{}/Library/Fonts", PathBuf::from(home).display()));
+        }
+    } else {
+        dirs.push("/usr/share/fonts".into());
+        dirs.push("/usr/local/share/fonts".into());
+        if let Some(home) = std::env::var_os("HOME") {
+            dirs.push(format!("{}/.local/share/fonts", PathBuf::from(home).display()));
+        }
+        dirs.push(format!("{}/.fonts", std::env::var("HOME").unwrap_or_default()));
+    }
+    dirs.retain(|d| std::path::Path::new(d).is_dir());
+    dirs.dedup();
+    dirs
+}
+
+/// 目录（递归一层子目录）下的字体文件，按路径排序
+pub fn list_font_files(dir: &str) -> Vec<String> {
+    fn one(dir: &std::path::Path, out: &mut Vec<String>, depth: u8) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                if depth > 0 {
+                    one(&p, out, depth - 1);
+                }
+            } else if matches!(
+                p.extension().and_then(|s| s.to_str()).map(|s| s.to_ascii_lowercase()).as_deref(),
+                Some("ttf" | "otf" | "ttc")
+            ) {
+                out.push(p.to_string_lossy().into_owned());
+            }
+        }
+    }
+    let mut out = Vec::new();
+    one(std::path::Path::new(dir), &mut out, 1);
+    out.sort();
+    out
 }

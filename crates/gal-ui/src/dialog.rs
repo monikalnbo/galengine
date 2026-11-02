@@ -1,5 +1,6 @@
 //! 底部对话框：半透明盒 + 名字牌（角色色查 config.game.name_colors）+ 打字机正文。
 //! DialogStyle 已纯数据化迁至 gal-config::style（Rect→[i32;4]），此处仅 re-export。
+//! 正文支持 ruby 注音（基底上方小字）与已读文字色。
 
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
@@ -7,11 +8,97 @@ use sdl2::render::{BlendMode, Canvas};
 use sdl2::video::Window;
 
 use gal_text::font::FontBook;
+use gal_text::layout::Unit;
 use gal_text::writer::Typewriter;
 
 /// 对话框样式（数据层在 gal-config::style，断行与绘制共用）
 pub use gal_config::DialogStyle;
 
+/// 揭示前缀裁剪：按「已显字符数」取可见单元；最后一单元可能只露一部分
+fn visible_prefix(units: &[Unit], shown: usize) -> Vec<&Unit> {
+    let mut out = Vec::new();
+    let mut left = shown;
+    for u in units {
+        if left == 0 {
+            break;
+        }
+        out.push(u);
+        left = left.saturating_sub(u.chars());
+    }
+    out
+}
+
+/// 绘制一段单元序列（含 ruby 与阴影）。返回已画到的 x 坐标。
+#[allow(clippy::too_many_arguments)]
+fn draw_units(
+    canvas: &mut Canvas<Window>,
+    fonts: &mut FontBook,
+    units: &[Unit],
+    x: i32,
+    y: i32,
+    style: &DialogStyle,
+    color: Color,
+) -> Result<i32, String> {
+    let o = style.outline as i32;
+    let shadow = (style.shadow_offset != [0, 0]).then(|| {
+        let [r, g, b] = style.shadow_color;
+        (Color::RGB(r, g, b), style.shadow_offset)
+    });
+    let mut cx = x;
+    for u in units {
+        match u {
+            Unit::Ch(c) => {
+                let s = c.to_string();
+                draw_piece(canvas, fonts, &s, cx, y, o, style.font_size, color, shadow)?;
+                cx += fonts.text_width(style.font_size, &s) as i32;
+            }
+            Unit::Ruby(base, ruby) => {
+                let bw = fonts.text_width(style.font_size, base) as i32;
+                let rw = fonts.text_width(style.ruby_size, ruby) as i32;
+                let w = bw.max(rw);
+                // 注音在基底上方居中（只在有注音时画）
+                if !ruby.is_empty() {
+                    let rx = cx + (w - rw) / 2;
+                    let ry = y - (style.ruby_size as i32) + 2;
+                    draw_piece(canvas, fonts, ruby, rx, ry, o, style.ruby_size, color, shadow)?;
+                }
+                let bx = cx + (w - bw) / 2;
+                draw_piece(canvas, fonts, base, bx, y, o, style.font_size, color, shadow)?;
+                cx += w;
+            }
+        }
+    }
+    Ok(cx)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_piece(
+    canvas: &mut Canvas<Window>,
+    fonts: &mut FontBook,
+    s: &str,
+    x: i32,
+    y: i32,
+    o: i32,
+    size: u16,
+    color: Color,
+    shadow: Option<(Color, [i32; 2])>,
+) -> Result<(), String> {
+    if let Some((sc, [sx, sy])) = shadow {
+        let tex = fonts.render_outlined(size, sc, s, style_outline(o))?;
+        let q = tex.query();
+        canvas.copy(tex, None, Some(Rect::new(x + sx, y + sy, q.width, q.height)))?;
+    }
+    let tex = fonts.render_outlined(size, color, s, style_outline(o))?;
+    let q = tex.query();
+    canvas.copy(tex, None, Some(Rect::new(x, y, q.width, q.height)))?;
+    Ok(())
+}
+
+fn style_outline(o: i32) -> u8 {
+    o.clamp(0, 255) as u8
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn draw(
     canvas: &mut Canvas<Window>,
     fonts: &mut FontBook,
@@ -54,52 +141,35 @@ pub fn draw(
         canvas.copy(tex, None, Some(dst))?;
     }
 
-    // 正文：单行单次纹理缓存 + 字符宽度裁剪绘制（彻底消灭逐字创建纹理的显存暴涨）
+    // 正文：逐行单元绘制（纹理缓存按整行/整单元命中）
     let (cur_line, cur_chars) = tw.reveal_pos();
-    let line_h = fonts.line_h_spaced(style.font_size, style.line_spacing);
+    // 只有本页含 ruby 时才在行高上预留注音空间（旧剧本排版零变化）
+    let has_ruby = tw.current_units().iter().any(|l| l.iter().any(|u| matches!(u, Unit::Ruby(..))));
+    let line_h = fonts.line_h_spaced(style.font_size, style.line_spacing)
+        + if has_ruby { style.ruby_size as i32 + 2 } else { 0 };
     let [tr, tg, tb] = style.text_color;
-    let color = Color::RGB(tr, tg, tb);
-    // 描边模式下字形纹理四周各扩 outline 像素，绘制时反向外移对齐
+    let text_color = Color::RGB(tr, tg, tb);
+    let read_color = style.read_color.map(|[r, g, b]| Color::RGB(r, g, b));
     let o = style.outline as i32;
-    let [sx, sy] = style.shadow_offset;
-    let shadow = if sx != 0 || sy != 0 {
-        let [sr, sg, sb] = style.shadow_color;
-        Some(Color::RGB(sr, sg, sb))
-    } else {
-        None
-    };
-    for (i, line) in tw.current_page().iter().enumerate() {
+    for (i, line) in tw.current_units().iter().enumerate() {
         if i > cur_line || line.is_empty() {
             break;
         }
-        let total_chars = line.chars().count();
-        let shown = if i < cur_line { total_chars } else { cur_chars };
+        let shown =
+            if i < cur_line { line.iter().map(Unit::chars).sum::<usize>() } else { cur_chars };
         if shown == 0 {
             continue;
         }
+        let visible = visible_prefix(line, shown);
         let x = style.text_x - o;
         let y = style.text_y + i as i32 * line_h - o;
-        // 打字机裁剪宽度（含描边外扩）
-        let clip_w = (shown < total_chars)
-            .then(|| fonts.line_prefix_w(style.font_size, line, shown) + o as u32);
-        // 先铺阴影（同字形另色纹理），再盖正文
-        if let Some(sc) = shadow {
-            let tex = fonts.render_outlined(style.font_size, sc, line, style.outline)?;
-            let q = tex.query();
-            let w = clip_w.map_or(q.width, |w| w.min(q.width));
-            let src = clip_w.map(|_| Rect::new(0, 0, w, q.height));
-            canvas.copy(tex, src, Some(Rect::new(x + sx, y + sy, w, q.height)))?;
-        }
-        let tex = fonts.render_outlined(style.font_size, color, line, style.outline)?;
-        let q = tex.query();
-        let dst = match clip_w {
-            Some(w) => {
-                let w = w.min(q.width);
-                (Some(Rect::new(0, 0, w, q.height)), Rect::new(x, y, w, q.height))
-            }
-            None => (None, Rect::new(x, y, q.width, q.height)),
+        // 已读行：整行换色（当前正在打字的行始终用正文字色）
+        let color = match read_color {
+            Some(c) if i < cur_line => c,
+            _ => text_color,
         };
-        canvas.copy(tex, dst.0, Some(dst.1))?;
+        let visible: Vec<Unit> = visible.into_iter().cloned().collect();
+        draw_units(canvas, fonts, &visible, x, y, style, color)?;
     }
 
     // 页满指示：右下角「▼」呼吸（作者可关）

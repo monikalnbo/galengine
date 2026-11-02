@@ -47,6 +47,35 @@ pub fn frame(
     let skin = g.skin.clone();
     let name = g.interp.cur_name.clone();
     let sel = g.choice_sel.min(g.choice_len().saturating_sub(1));
+    // 选项/提示文本过语言包（{@键}）；旧剧本无宏 → 原样
+    let choice_loc: Option<(String, Vec<(String, String)>)> = match &g.interp.state {
+        RunState::WaitChoice { prompt, items } => {
+            let lp = g.interp.localize(prompt);
+            let li: Vec<(String, String)> =
+                items.iter().map(|(t, l)| (g.interp.localize(t), l.clone())).collect();
+            if gal_script::interp::dbg()
+                && li.first().map(|(t, _)| t != &items[0].0).unwrap_or(false)
+            {
+                // 同一组选项只打一次（等待选择时每帧都会走到这里）
+                let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+                for (t, _) in &li {
+                    for b in t.as_bytes() {
+                        h ^= *b as u64;
+                        h = h.wrapping_mul(0x100_0000_01b3);
+                    }
+                }
+                if g.lang_logged != h {
+                    g.lang_logged = h;
+                    eprintln!(
+                        "[dbg lang] 选项本地化：{}",
+                        li.first().map(|(t, _)| t.as_str()).unwrap_or("")
+                    );
+                }
+            }
+            Some((lp, li))
+        }
+        _ => None,
+    };
     let now = g.now_ms;
     let auto = g.auto;
 
@@ -56,13 +85,17 @@ pub fn frame(
             if !g.hide_ui {
                 match &g.interp.state {
                     RunState::WaitChoice { prompt, items } => {
+                        let (lprompt, litems) = choice_loc
+                            .as_ref()
+                            .map(|(p, i)| (p.as_str(), i.as_slice()))
+                            .unwrap_or((prompt, items.as_slice()));
                         choice::draw(
                             tc,
                             fonts,
                             &g.conf.ui.choice,
                             &g.conf.ui.button,
-                            prompt,
-                            items,
+                            lprompt,
+                            litems,
                             sel,
                         )?;
                         for e in &g.exts {
@@ -118,6 +151,21 @@ pub fn frame(
         canvas.copy(tex, None, Some(Rect::new(r.x + 24, r.y + 10, q.width, q.height)))?;
     }
 
+    // 左下角小字提示（语音被打断等；不遮挡对话框）
+    if let Some(m) = &g.sys.voice_hint {
+        canvas.set_blend_mode(BlendMode::Blend);
+        let a = ((m.left_ms / 1500.0).clamp(0.0, 1.0) * 220.0) as u8;
+        let tex = fonts.render_text(20, Color::RGBA(210, 222, 255, a), &m.text)?;
+        let q = tex.query();
+        let (_, wh) =
+            canvas.output_size().unwrap_or((gal_config::LOGICAL_W, gal_config::LOGICAL_H));
+        canvas.copy(
+            tex,
+            None,
+            Some(Rect::new(18, wh as i32 - q.height as i32 - 18, q.width, q.height)),
+        )?;
+    }
+
     canvas.present();
     Ok(())
 }
@@ -134,18 +182,21 @@ fn draw_overlay(
     match &g.overlay {
         Overlay::None => {}
         Overlay::Menu { sel } => {
+            // 系统菜单文字过语言包
+            let items: Vec<String> =
+                esc_items(&g.conf).iter().map(|t| g.interp.localize(t)).collect();
             menu::draw(
                 tc,
                 fonts,
                 &g.conf.ui.menu,
                 &g.conf.ui.button,
-                &esc_items(&g.conf),
+                &items,
                 *sel,
                 g.conf.ui.menu.top_y,
                 true,
             )?;
         }
-        Overlay::Title { sel, .. } => {
+        Overlay::Title { sel, t } => {
             title::draw(
                 tc,
                 fonts,
@@ -155,6 +206,8 @@ fn draw_overlay(
                 &g.sys.meta.title_evolve,
                 *sel,
                 g.now_ms,
+                *t,
+                &g.lang.strings,
             )?;
         }
         Overlay::Save { mode_save, sel } => {

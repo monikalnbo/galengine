@@ -1,0 +1,11 @@
+# 主题包示例：放在 data/skins/*.yaml（或 .yml）。
+# 一个文件 = 一套皮肤（有 name）；也可以写 schemes: [ ... ] 一次放多套。
+# 与 game.yaml 的 ui.skin.schemes 合并，同名皮肤以后扫描到的为准。
+name: 樱雾
+dialog_fill: [28, 16, 26, 210]
+dialog_border: [255, 190, 210, 90]
+dialog_text: [248, 232, 238]
+bar_fill: [44, 26, 40, 220]
+bar_accent: [120, 56, 88, 235]
+bar_border: [220, 150, 180, 150]
+bar_text: [240, 214, 226]

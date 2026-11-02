@@ -13,9 +13,9 @@ use super::{SettingKind, SettingRow, SettingsCtx};
 pub const FONT: u16 = 24;
 const SMALL: u16 = 18;
 const TITLE: u16 = 30;
-const ROW_H: i32 = 50;
-const GAP: i32 = 8;
-const TOP_Y: i32 = 108;
+const ROW_H: i32 = 46;
+const GAP: i32 = 4;
+const TOP_Y: i32 = 96;
 const ROW_X: i32 = 100;
 const LABEL_X: i32 = 140;
 const BAR_X: i32 = 470;
@@ -24,8 +24,8 @@ const BAR_H: u32 = 10;
 const SLIDER_R: i32 = 12;
 const VALUE_X: i32 = 990;
 
-/// 每页行数（含分组标题的空隙；按 720 高固定排版）
-pub const PER_PAGE: usize = 10;
+/// 每页行数（按 720 高排版：96 + 11×(46+4) = 646，留底部呼吸）
+pub const PER_PAGE: usize = 11;
 
 fn row_w() -> u32 {
     LOGICAL_W - 200
