@@ -1,6 +1,6 @@
 //! 解释器指令分发：执行单条 Command，修改 Stage/Vars 或向 SysEvents 队列追加系统事件。
 
-use super::types::{InputSpec, RunState, SysEvent};
+use super::types::{AudioWait, InputSpec, RunState, SysEvent};
 use super::Interp;
 use crate::command::Command;
 use crate::vars::Value;
@@ -32,6 +32,84 @@ impl Interp {
                 self.cur_bgm = Some(n.clone());
                 self.events.push(SysEvent::Bgm(n));
                 Ok(false)
+            }
+            // ===== v0.3.2 KAG3 音频标签组 =====
+            Command::PlayBgm { name, fade_in_ms } => {
+                self.events.push(SysEvent::PlayBgm { name, fade_in_ms });
+                Ok(false)
+            }
+            Command::PauseBgm => {
+                self.events.push(SysEvent::PauseBgm);
+                Ok(false)
+            }
+            Command::ResumeBgm => {
+                self.events.push(SysEvent::ResumeBgm);
+                Ok(false)
+            }
+            Command::FadeInBgm { name, ms } => {
+                self.events.push(SysEvent::FadeInBgm { name, ms });
+                Ok(false)
+            }
+            Command::FadeOutBgm { ms } => {
+                self.events.push(SysEvent::FadeOutBgm { ms });
+                Ok(false)
+            }
+            Command::FadePauseBgm { ms } => {
+                self.events.push(SysEvent::FadePauseBgm { ms });
+                Ok(false)
+            }
+            Command::FadeBgm { to_pct, ms } => {
+                self.events.push(SysEvent::FadeBgm { to_pct, ms });
+                Ok(false)
+            }
+            Command::XchgBgm { name, ms } => {
+                self.events.push(SysEvent::XchgBgm { name, ms });
+                Ok(false)
+            }
+            Command::BgmOpt { loop_start_ms, loop_end_ms } => {
+                self.events.push(SysEvent::BgmOpt { loop_start_ms, loop_end_ms });
+                Ok(false)
+            }
+            Command::PlaySe { name } => {
+                self.events.push(SysEvent::PlaySe { name });
+                Ok(false)
+            }
+            Command::StopSe => {
+                self.events.push(SysEvent::StopSe);
+                Ok(false)
+            }
+            Command::FadeInSe { name, ms } => {
+                self.events.push(SysEvent::FadeInSe { name, ms });
+                Ok(false)
+            }
+            Command::FadeOutSe { name, ms } => {
+                self.events.push(SysEvent::FadeOutSe { name, ms });
+                Ok(false)
+            }
+            Command::FadeSe { to_pct, ms } => {
+                self.events.push(SysEvent::FadeSe { to_pct, ms });
+                Ok(false)
+            }
+            Command::SeOpt { name } => {
+                self.events.push(SysEvent::SeOpt { name });
+                Ok(false)
+            }
+            // 等待标签：引擎轮询音频状态，由 gal-engine 侧把 WaitAudio 换成放行
+            Command::WaitBgm => {
+                self.state = RunState::WaitAudio(AudioWait::BgmFade);
+                Ok(true)
+            }
+            Command::WaitLoop => {
+                self.state = RunState::WaitAudio(AudioWait::BgmLoopHit);
+                Ok(true)
+            }
+            Command::WaitSe => {
+                self.state = RunState::WaitAudio(AudioWait::SeDone);
+                Ok(true)
+            }
+            Command::WaitSeFade => {
+                self.state = RunState::WaitAudio(AudioWait::SeFade);
+                Ok(true)
             }
             Command::BgmStop => {
                 self.cur_bgm = None;

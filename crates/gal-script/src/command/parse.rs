@@ -149,6 +149,63 @@ impl Command {
                 }),
                 _ => err("trans 用法：trans 层(0-63) 素材 [ms] [universal|crossfade]"),
             },
+            // ===== v0.3.2 KAG3 音频标签组 =====
+            "playbgm" => match tokens.as_slice() {
+                [s] => Ok(Command::PlayBgm { name: s.to_string(), fade_in_ms: 0 }),
+                [s, ms] => Ok(Command::PlayBgm { name: s.to_string(), fade_in_ms: num(ms)? }),
+                _ => err("playbgm 用法：playbgm 名称 [淡入ms]"),
+            },
+            "pausebgm" if tokens.is_empty() => Ok(Command::PauseBgm),
+            "resumebgm" if tokens.is_empty() => Ok(Command::ResumeBgm),
+            "fadeinbgm" => match tokens.as_slice() {
+                [s, ms] => Ok(Command::FadeInBgm { name: s.to_string(), ms: num(ms)? }),
+                _ => err("fadeinbgm 用法：fadeinbgm 名称 ms"),
+            },
+            "fadeoutbgm" => match tokens.as_slice() {
+                [ms] => Ok(Command::FadeOutBgm { ms: num(ms)? }),
+                _ => err("fadeoutbgm 用法：fadeoutbgm ms"),
+            },
+            "fadepausebgm" => match tokens.as_slice() {
+                [ms] => Ok(Command::FadePauseBgm { ms: num(ms)? }),
+                _ => err("fadepausebgm 用法：fadepausebgm ms"),
+            },
+            "fadebgm" => match tokens.as_slice() {
+                [pct, ms] => Ok(Command::FadeBgm { to_pct: num(pct)?, ms: num(ms)? }),
+                _ => err("fadebgm 用法：fadebgm 百分比 ms"),
+            },
+            "xchgbgm" => match tokens.as_slice() {
+                [s, ms] => Ok(Command::XchgBgm { name: s.to_string(), ms: num(ms)? }),
+                _ => err("xchgbgm 用法：xchgbgm 名称 ms"),
+            },
+            "bgmopt" => match tokens.as_slice() {
+                [a, b] => Ok(Command::BgmOpt { loop_start_ms: num(a)?, loop_end_ms: num(b)? }),
+                _ => err("bgmopt 用法：bgmopt 循环起点ms 循环终点ms"),
+            },
+            "playse" => match tokens.as_slice() {
+                [s] => Ok(Command::PlaySe { name: s.to_string() }),
+                _ => err("playse 用法：playse 名称"),
+            },
+            "stopse" if tokens.is_empty() => Ok(Command::StopSe),
+            "fadeinse" => match tokens.as_slice() {
+                [s, ms] => Ok(Command::FadeInSe { name: s.to_string(), ms: num(ms)? }),
+                _ => err("fadeinse 用法：fadeinse 名称 ms"),
+            },
+            "fadeoutse" => match tokens.as_slice() {
+                [s, ms] => Ok(Command::FadeOutSe { name: s.to_string(), ms: num(ms)? }),
+                _ => err("fadeoutse 用法：fadeoutse 名称 ms"),
+            },
+            "fadese" => match tokens.as_slice() {
+                [pct, ms] => Ok(Command::FadeSe { to_pct: num(pct)?, ms: num(ms)? }),
+                _ => err("fadese 用法：fadese 百分比 ms"),
+            },
+            "seopt" => match tokens.as_slice() {
+                [s] => Ok(Command::SeOpt { name: s.to_string() }),
+                _ => err("seopt 用法：seopt 名称"),
+            },
+            "wb" if tokens.is_empty() => Ok(Command::WaitBgm),
+            "wl" if tokens.is_empty() => Ok(Command::WaitLoop),
+            "ws" if tokens.is_empty() => Ok(Command::WaitSe),
+            "wf" if tokens.is_empty() => Ok(Command::WaitSeFade),
             // KAG3 `wt`：多种等待类型；当前只实装转场等待（其余参数忽略）
             "wt" => Ok(Command::WaitTrans),
             "clear" => Ok(Command::Clear),

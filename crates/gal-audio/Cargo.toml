@@ -1,10 +1,10 @@
 [package]
 name = "gal-audio"
-description = "galgame 引擎·音频层：BGM/SE（SDL_mixer）"
+description = "galgame 引擎·音频层：BGM/SE/语音（kira 混音 + KAG 音频语义）"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-sdl2.workspace = true
 gal-config.workspace = true
+kira = { version = "0.10", default-features = false, features = ["cpal", "mp3", "ogg", "flac", "wav"] }

@@ -21,6 +21,32 @@ impl Game {
     fn apply_event(&mut self, ev: SysEvent, canvas: &mut Canvas<Window>) -> Result<(), String> {
         match ev {
             SysEvent::Bgm(n) => self.sys.audio.play_bgm(&n),
+            // ===== v0.3.2 KAG3 音频标签组 =====
+            SysEvent::PlayBgm { name, fade_in_ms } => {
+                if fade_in_ms > 0 {
+                    self.sys.audio.fade_in_bgm(&name, fade_in_ms);
+                } else {
+                    self.sys.audio.play_bgm(&name);
+                }
+            }
+            SysEvent::PauseBgm => self.sys.audio.pause_bgm(),
+            SysEvent::ResumeBgm => self.sys.audio.resume_bgm(),
+            SysEvent::FadeInBgm { name, ms } => self.sys.audio.fade_in_bgm(&name, ms),
+            SysEvent::FadeOutBgm { ms } => self.sys.audio.fade_out_bgm(ms),
+            SysEvent::FadePauseBgm { ms } => self.sys.audio.fade_pause_bgm(ms),
+            SysEvent::FadeBgm { to_pct, ms } => self.sys.audio.fade_bgm(to_pct, ms),
+            SysEvent::XchgBgm { name, ms } => self.sys.audio.xchg_bgm(&name, ms),
+            SysEvent::BgmOpt { loop_start_ms, loop_end_ms } => {
+                self.sys.audio.bgmopt(loop_start_ms, loop_end_ms)
+            }
+            SysEvent::PlaySe { name } => self.sys.audio.play_se(&name),
+            SysEvent::StopSe => self.sys.audio.stop_se(None),
+            SysEvent::FadeInSe { name, ms } => self.sys.audio.play_se_impl(&name, ms, 0, None),
+            SysEvent::FadeOutSe { name, ms } => self.sys.audio.play_se_impl(&name, 0, ms, None),
+            SysEvent::FadeSe { to_pct, ms } => {
+                self.sys.audio.fade_se(to_pct, ms);
+            }
+            SysEvent::SeOpt { name } => self.sys.audio.seopt(&name),
             SysEvent::BgmStop => self.sys.audio.stop_bgm(),
             SysEvent::BgmFadeOut { ms } => self.sys.audio.fade_out_bgm(ms),
             SysEvent::Se(n) => self.sys.audio.play_se(&n),

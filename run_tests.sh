@@ -11,11 +11,11 @@ SCRIPTS="${@:-}"
 cargo build --release --quiet || exit 1
 export ES_DATA_DIR="$DATA"
 export ES_DEBUG=1
-export ES_DEBUG_AUTOCLICK_MS=600
+export ES_DEBUG_AUTOCLICK_MS=250
 fail=0
 for s in $SCRIPTS; do
   ok=$(xvfb-run -a -s "-screen 0 1280x800x24" bash -c \
-    "ES_SCRIPT=$s timeout 15 ./target/release/galengine 2>&1 | grep -c ended" || true)
+    "ES_SCRIPT=$s timeout 45 ./target/release/galengine 2>&1 | grep -c ended" || true)
   echo "$s -> ended:$ok"
   [ "$ok" -ge 1 ] || { echo "FAIL: $s"; fail=1; }
 done

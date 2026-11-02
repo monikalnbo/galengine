@@ -2,6 +2,40 @@
 
 遵循 [语义化版本](https://semver.org/lang/zh-CN/)。旧 `game.yaml`、旧存档、旧 `savedata/global.json` 均可直接使用。
 
+## v0.3.2 — 2026-11-02
+
+**音频库化批**：gal-audio 手写混音器整体退役，换用 [kira 0.10](https://github.com/tazz4843/kira)（内部 cpal 输出 + symphonia 解码）；
+全新 KAG3 音频标签组（约 18 个标签）落地。旧 `game.yaml`、旧剧本（`bgm`/`se`/`voice`）、旧存档零改动兼容；
+无声卡/缺文件照旧静默降级，且新增 gal-audit 多路日志证据链（`{数据目录}/log/engine.log` + `trace.log`）。
+
+### 换库（自研 → 成熟库）
+
+- **解码**：手写 ogg/PCM 解码 → kira 内置 symphonia（ogg/mp3/flac/wav）。
+- **输出**：手写 cpal 流 + 环形缓冲混音 → kira AudioManager（cpal 后端）。
+- **淡入淡出**：手写线性包络 → kira Tween（fade_in_tween / set_volume / stop / pause 均可挂时长）。
+- **循环点**：手写回卷计数 → kira loop_region（命中检测仍按播放头跳变判定，供 `wl` 等待）。
+- 手写保留：通道映射（BGM A/B 双缓冲、SE 多实例、语音独占）、KAG 等待语义轮询、缺文件查找、gal-audit 日志/trace 埋点。
+
+### 新增 KAG3 音频标签组（旧 `bgm/se/voice` 语法原样可用）
+
+- BGM：`playbgm [ms]`（双缓冲淡入）/ `pausebgm` / `resumebgm` / `fadeinbgm 名称 ms` /
+  `fadeoutbgm ms` / `fadepausebgm ms`（淡出暂停，播放头停在淡出点）/ `fadebgm 百分比 ms` /
+  `xchgbgm 名称 ms`（双缓冲交叉淡化无缝切歌）/ `bgmopt 起ms 止ms`（循环点）。
+- SE：`playse 名称` / `stopse` / `fadeinse 名称 ms` / `fadeoutse 名称 ms` / `fadese 百分比 ms` / `seopt 名称`。
+- 等待：`wb`（BGM 淡入淡出结束）/ `wl`（到达循环点）/ `ws`（SE 全部播完）/ `wf`（SE 淡入淡出结束）——
+  无声卡降级环境立即放行，不卡演出。
+
+### 多路日志（gal-audit）
+
+- `{数据目录}/log/engine.log`：分级日志（`ES_LOG_LEVEL` 过滤），运行时失败全量留证。
+- `{数据目录}/log/trace.log`：每个音频动作一条 `tag=k=v` 追踪记录（`[相对秒] subsys tag ...`）。
+- stderr：WARN+ 镜像（兼容旧终端习惯），`ES_LOG_STDERR=1` 全量；日志自身失败自动降级为仅 stderr。
+
+### 工程
+
+- `run_tests.sh`：无头回归提速（autoclick 600ms→250ms）并放宽单剧本超时到 45s。
+- 演示剧本 `scenario/audio-demo.ks` + 合成音频资产（bgm/theme.ogg、bgm/next.ogg、sound/click.ogg）。
+
 ## v0.3.1 — 2026-11-02
 
 **功能批（补丁版号）**：清掉 v0.3.0 遗留的四项，并补齐四项 P2 能力（主题包 / 注音 / 多语言 / 无障碍朗读）。

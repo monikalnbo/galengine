@@ -13,6 +13,54 @@ pub enum SysEvent {
     BgmFadeOut {
         ms: u32,
     },
+    // ===== v0.3.2 KAG3 音频标签组事件 =====
+    PlayBgm {
+        name: String,
+        fade_in_ms: u32,
+    },
+    PauseBgm,
+    ResumeBgm,
+    FadeInBgm {
+        name: String,
+        ms: u32,
+    },
+    FadeOutBgm {
+        ms: u32,
+    },
+    FadePauseBgm {
+        ms: u32,
+    },
+    FadeBgm {
+        to_pct: i32,
+        ms: u32,
+    },
+    XchgBgm {
+        name: String,
+        ms: u32,
+    },
+    BgmOpt {
+        loop_start_ms: u64,
+        loop_end_ms: u64,
+    },
+    PlaySe {
+        name: String,
+    },
+    StopSe,
+    FadeInSe {
+        name: String,
+        ms: u32,
+    },
+    FadeOutSe {
+        name: String,
+        ms: u32,
+    },
+    FadeSe {
+        to_pct: i32,
+        ms: u32,
+    },
+    SeOpt {
+        name: String,
+    },
     Se(String),
     Voice(String),
     VoiceStop,
@@ -58,10 +106,30 @@ pub struct BacklogItem {
 #[derive(Debug, PartialEq, Clone)]
 pub enum RunState {
     WaitClick,
-    WaitTimer { left_ms: f32 },
-    WaitChoice { prompt: String, items: Vec<(String, String)> },
+    WaitTimer {
+        left_ms: f32,
+    },
+    WaitChoice {
+        prompt: String,
+        items: Vec<(String, String)>,
+    },
     WaitInput(Box<InputSpec>),
+    /// v0.3.2 音频等待（wb/wl/ws/wf）：记录等待开始时间，引擎轮询音频状态决定放行
+    WaitAudio(AudioWait),
     Ended,
+}
+
+/// 音频等待种类（RunState::WaitAudio）
+#[derive(Debug, PartialEq, Clone)]
+pub enum AudioWait {
+    /// wb：BGM 淡入淡出结束
+    BgmFade,
+    /// wl：BGM 到达循环点
+    BgmLoopHit,
+    /// ws：SE 全部播完
+    SeDone,
+    /// wf：SE 淡入淡出结束
+    SeFade,
 }
 
 /// 输入框配置规格

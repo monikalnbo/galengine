@@ -51,6 +51,77 @@ pub enum Command {
     },
     /// 等待在途转场结束（KAG3 `wt` 的转场形态）
     WaitTrans,
+    // ===== v0.3.2 KAG3 音频标签组（双缓冲/淡入淡出/循环点/等待语义）=====
+    /// playbgm [ms]：双缓冲播放 BGM（可指定淡入 ms）
+    PlayBgm {
+        name: String,
+        fade_in_ms: u32,
+    },
+    /// pausebgm：暂停当前 BGM（保留播放头）
+    PauseBgm,
+    /// resumebgm：恢复暂停
+    ResumeBgm,
+    /// fadeinbgm ms：定时淡入播放
+    FadeInBgm {
+        name: String,
+        ms: u32,
+    },
+    /// fadeoutbgm ms：定时淡出并停止
+    FadeOutBgm {
+        ms: u32,
+    },
+    /// fadepausebgm ms：淡出后暂停（播放头停在淡出点）
+    FadePauseBgm {
+        ms: u32,
+    },
+    /// fadebgm to% ms：在播 BGM 音量淡到指定百分比
+    FadeBgm {
+        to_pct: i32,
+        ms: u32,
+    },
+    /// xchgbgm name ms：双缓冲交叉淡化切换（无缝切歌）
+    XchgBgm {
+        name: String,
+        ms: u32,
+    },
+    /// bgmopt start end：循环点（毫秒）
+    BgmOpt {
+        loop_start_ms: u64,
+        loop_end_ms: u64,
+    },
+    /// playse name：播放 SE（多实例并发）
+    PlaySe {
+        name: String,
+    },
+    /// stopse：停掉全部 SE
+    StopSe,
+    /// fadeinse name ms：淡入播放 SE
+    FadeInSe {
+        name: String,
+        ms: u32,
+    },
+    /// fadeoutse name ms：淡出并停（新起实例即挂淡出）
+    FadeOutSe {
+        name: String,
+        ms: u32,
+    },
+    /// fadese to% ms：最近实例音量淡到百分比
+    FadeSe {
+        to_pct: i32,
+        ms: u32,
+    },
+    /// seopt name：SE 播放选项（预留：目前记录到 trace）
+    SeOpt {
+        name: String,
+    },
+    /// wb：等待 BGM 淡入淡出结束
+    WaitBgm,
+    /// wl：等待 BGM 到达循环点一次
+    WaitLoop,
+    /// ws：等待 SE 全部播完
+    WaitSe,
+    /// wf：等待 SE 淡入淡出结束
+    WaitSeFade,
     Clear,
     Wait(u32),
     N(String),

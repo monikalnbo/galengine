@@ -217,3 +217,54 @@ fn 演示剧本start_ks全量解析通过() {
         }
     }
 }
+
+// ===== v0.3.2 KAG3 音频标签组解析 =====
+
+#[test]
+fn v032音频标签组_解析() {
+    assert!(matches!(
+        cmd("playbgm", "theme").unwrap(),
+        Command::PlayBgm { ref name, fade_in_ms: 0 } if name == "theme"
+    ));
+    assert!(matches!(
+        cmd("playbgm", "theme 800").unwrap(),
+        Command::PlayBgm { fade_in_ms: 800, .. }
+    ));
+    assert!(matches!(cmd("pausebgm", "").unwrap(), Command::PauseBgm));
+    assert!(matches!(cmd("resumebgm", "").unwrap(), Command::ResumeBgm));
+    assert!(matches!(
+        cmd("fadeinbgm", "theme 1200").unwrap(),
+        Command::FadeInBgm { ref name, ms: 1200 } if name == "theme"
+    ));
+    assert!(matches!(cmd("fadeoutbgm", "500").unwrap(), Command::FadeOutBgm { ms: 500 }));
+    assert!(matches!(cmd("fadepausebgm", "300").unwrap(), Command::FadePauseBgm { ms: 300 }));
+    assert!(matches!(cmd("fadebgm", "40 600").unwrap(), Command::FadeBgm { to_pct: 40, ms: 600 }));
+    assert!(matches!(
+        cmd("xchgbgm", "next 900").unwrap(),
+        Command::XchgBgm { ref name, ms: 900 } if name == "next"
+    ));
+    assert!(matches!(
+        cmd("bgmopt", "10000 30000").unwrap(),
+        Command::BgmOpt { loop_start_ms: 10000, loop_end_ms: 30000 }
+    ));
+    assert!(matches!(
+        cmd("playse", "click").unwrap(),
+        Command::PlaySe { ref name } if name == "click"
+    ));
+    assert!(matches!(cmd("stopse", "").unwrap(), Command::StopSe));
+    assert!(matches!(cmd("fadeinse", "click 200").unwrap(), Command::FadeInSe { ms: 200, .. }));
+    assert!(matches!(cmd("fadeoutse", "click 400").unwrap(), Command::FadeOutSe { ms: 400, .. }));
+    assert!(matches!(cmd("fadese", "30 500").unwrap(), Command::FadeSe { to_pct: 30, ms: 500 }));
+    assert!(matches!(cmd("wb", "").unwrap(), Command::WaitBgm));
+    assert!(matches!(cmd("wl", "").unwrap(), Command::WaitLoop));
+    assert!(matches!(cmd("ws", "").unwrap(), Command::WaitSe));
+    assert!(matches!(cmd("wf", "").unwrap(), Command::WaitSeFade));
+    // 旧语法零改动：bgm/se/voice 仍然照旧解析
+    assert!(matches!(cmd("bgm", "stop").unwrap(), Command::BgmStop));
+    assert!(matches!(cmd("bgm", "fadeout 400").unwrap(), Command::BgmFadeOut { ms: 400 }));
+    assert!(matches!(cmd("bgm", "theme").unwrap(), Command::Bgm(ref n) if n == "theme"));
+    // 非法参数给中文报错
+    assert!(cmd("bgmopt", "9999").is_err());
+    assert!(cmd("fadeoutbgm", "").is_err());
+    assert!(cmd("fadebgm", "40").is_err());
+}

@@ -10,7 +10,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use types::{dbg, BacklogItem, InputSpec, RunState, SysEvent};
+pub use types::{dbg, AudioWait, BacklogItem, InputSpec, RunState, SysEvent};
 
 use std::collections::HashMap;
 
@@ -213,9 +213,22 @@ impl Interp {
                     self.run_until_wait_ok();
                 }
             }
-            RunState::WaitChoice { .. } | RunState::WaitInput(_) | RunState::Ended => {}
+            // WaitAudio 不在解释器里推进：由引擎轮询音频状态后调 audio_wait_release
+            RunState::WaitChoice { .. }
+            | RunState::WaitInput(_)
+            | RunState::WaitAudio(_)
+            | RunState::Ended => {}
         }
         self.stage.tick(dt_ms);
+    }
+
+    /// v0.3.2 音频等待放行：引擎确认条件满足后调用，继续解释
+    pub fn audio_wait_release(&mut self) -> Result<(), String> {
+        if matches!(self.state, RunState::WaitAudio(_)) {
+            self.run_until_wait()
+        } else {
+            Ok(())
+        }
     }
 
     /// 玩家点击推进（仅台词态）

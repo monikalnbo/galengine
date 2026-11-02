@@ -171,6 +171,22 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
             g.style_dirty = false;
         }
         g.sys.audio.pump();
+        // v0.3.2 音频等待（wb/wl/ws/wf）：轮询音频状态，满足即放行解释器
+        use gal_script::interp::{AudioWait, RunState};
+        if let RunState::WaitAudio(w) = &g.interp.state {
+            let a = &g.sys.audio;
+            // 无声卡降级：条件立即满足（不卡演出）
+            let ok = !a.ok
+                || match w {
+                    AudioWait::BgmFade => !a.bgm_fading(),
+                    AudioWait::BgmLoopHit => a.peek_loop_hit(),
+                    AudioWait::SeDone => !a.se_playing(),
+                    AudioWait::SeFade => !a.se_fading(),
+                };
+            if ok {
+                g.interp.audio_wait_release()?;
+            }
+        }
 
         // 拓展驱动（倒计时选项等）
         for e in g.exts.iter_mut() {
