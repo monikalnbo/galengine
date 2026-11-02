@@ -187,6 +187,14 @@ pub enum Command {
         label: String,
     },
     Return,
+    /// v0.3.5 宏定义行（lexer 已把宏体收走；执行到此处只作占位跳过）
+    MacroDefSkip,
+    /// v0.3.5 `erasemacro 名`：删除宏表中的宏（KAG3 erasemacro）
+    EraseMacro(String),
+    /// v0.3.5 `clearvar`：清空 f.* 全部游戏变量（存档里的 f 快照独立，不影响存档结构）
+    ClearVar,
+    /// v0.3.5 `clearsysvar`：清空 sf.* 系统变量（global.json 结构不变，只清键值）
+    ClearSysVar,
     Choice {
         prompt: String,
         items: Vec<(String, String)>,

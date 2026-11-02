@@ -340,11 +340,11 @@ impl Interp {
                 let if_at = self.pc - 1;
                 if hit {
                     // v0.3.4 压栈标记「本链已命中」：后续 elsif/else 走到即跳过
-                    self.branch_taken.push(if_at);
+                    self.branch_taken.push((self.cur_scope(), if_at));
                 } else {
                     // 假分支：沿 elsif 链找下一分支，否则 else/endif 之后
                     self.pc = self
-                        .next_branch_of(&self.file, if_at, if_at)
+                        .next_branch_of(&self.scope_file(), if_at, if_at)
                         .ok_or_else(|| format!("{ctx}：if 块配对表缺失（疑似剧本热更新）"))?;
                 }
                 Ok(false)
@@ -352,12 +352,12 @@ impl Interp {
             Command::ElsIf { cond } => {
                 let elsif_at = self.pc - 1;
                 let if_at = self
-                    .if_owner_of_branch(&self.file, elsif_at)
+                    .if_owner_of_branch(&self.scope_file(), elsif_at)
                     .ok_or_else(|| format!("{ctx}：elsif 配对表缺失"))?;
                 // 前面已有命中分支落到这里（fall-through）：整段跳过，不弹栈
-                if self.branch_taken.last() == Some(&if_at) {
+                if self.branch_taken.last() == Some(&(self.cur_scope(), if_at)) {
                     let (_, end) = *self
-                        .blocks_of(&self.file)
+                        .blocks_of(&self.scope_file())
                         .and_then(|b| b.get(&if_at))
                         .ok_or_else(|| format!("{ctx}：if 块配对表缺失"))?;
                     self.pc = end + 1;
@@ -367,10 +367,10 @@ impl Interp {
                     .map(|v| crate::expr::truthy(&v))
                     .map_err(|e| format!("{ctx}：elsif 条件错误：{e}"))?;
                 if hit {
-                    self.branch_taken.push(if_at);
+                    self.branch_taken.push((self.cur_scope(), if_at));
                 } else {
                     self.pc = self
-                        .next_branch_of(&self.file, if_at, elsif_at)
+                        .next_branch_of(&self.scope_file(), if_at, elsif_at)
                         .ok_or_else(|| format!("{ctx}：if 块配对表缺失"))?;
                 }
                 Ok(false)
@@ -387,8 +387,8 @@ impl Interp {
                 Ok(false)
             }
             Command::Eval { expr } => {
-                crate::expr::eval_assign(&expr.clone(), &mut self.vars)
-                    .map_err(|e| format!("{ctx}：eval 失败：{e}"))?;
+                let rv = crate::expr::eval_assign(&expr.clone(), &mut self.vars);
+                rv.map_err(|e| format!("{ctx}：eval 失败：{e}"))?;
                 Ok(false)
             }
             Command::Trace { text } => {
@@ -420,10 +420,10 @@ impl Interp {
             Command::Else => {
                 let else_at = self.pc - 1;
                 // 有命中分支标记时是「真分支走完跳过」；无标记 = elsif 全假落 else，照常进
-                if let Some(if_at) = self.if_owner_of_branch(&self.file, else_at) {
-                    if self.branch_taken.last() == Some(&if_at) {
+                if let Some(if_at) = self.if_owner_of_branch(&self.scope_file(), else_at) {
+                    if self.branch_taken.last() == Some(&(self.cur_scope(), if_at)) {
                         let end = self
-                            .else_target_of(&self.file, else_at)
+                            .else_target_of(&self.scope_file(), else_at)
                             .ok_or_else(|| format!("{ctx}：else 配对表缺失"))?;
                         self.pc = end + 1;
                         return Ok(false);
@@ -434,8 +434,8 @@ impl Interp {
             Command::EndIf => {
                 // 弹掉本块命中分支的标记（嵌套内层先弹）
                 let end_at = self.pc - 1;
-                if let Some(if_at) = self.if_owner_of_end(&self.file, end_at) {
-                    if self.branch_taken.last() == Some(&if_at) {
+                if let Some(if_at) = self.if_owner_of_end(&self.scope_file(), end_at) {
+                    if self.branch_taken.last() == Some(&(self.cur_scope(), if_at)) {
                         self.branch_taken.pop();
                     }
                 }
@@ -470,6 +470,41 @@ impl Interp {
                     .ok_or_else(|| format!("{ctx}：return 没有对应的 call"))?;
                 self.file = file;
                 self.pc = pc;
+                Ok(false)
+            }
+            // ===== v0.3.5 宏系统与变量清理 =====
+            // 宏定义占位行（宏体在 load 时已注册进宏表，这里直接跳过）
+            Command::MacroDefSkip => Ok(false),
+            Command::EraseMacro(name) => {
+                let removed = self.macros.remove(&name).is_some();
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    &format!(
+                        "[macro] erasemacro「{name}」：{}",
+                        if removed { "已删除" } else { "宏不存在（忽略）" }
+                    ),
+                );
+                Ok(false)
+            }
+            Command::ClearVar => {
+                let n = self.vars.f.len();
+                self.vars.f.clear();
+                gal_audio::log::log(
+                    gal_audio::log::Level::Info,
+                    "script",
+                    &format!("[clearvar] 已清空 {n} 个 f.* 游戏变量"),
+                );
+                Ok(false)
+            }
+            Command::ClearSysVar => {
+                let n = self.vars.sf.len();
+                self.vars.sf.clear();
+                gal_audio::log::log(
+                    gal_audio::log::Level::Info,
+                    "script",
+                    &format!("[clearsysvar] 已清空 {n} 个 sf.* 系统变量（global.json 结构不变）"),
+                );
                 Ok(false)
             }
             Command::Jump { file, label } => {

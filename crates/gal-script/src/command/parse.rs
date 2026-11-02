@@ -11,6 +11,8 @@ impl Command {
                 return Ok(Command::Choice { prompt: prompt.clone(), items: items.clone() })
             }
             LineKind::Label(_) => return Err(format!("{ctx}：label 不应作为指令执行")),
+            // v0.3.5 宏定义行在 lexer 已收走宏体，正常不会流到这里（宏注册时过滤）
+            LineKind::MacroDef { .. } => return Ok(Command::MacroDefSkip),
         };
         let tokens: Vec<&str> = rest.split_whitespace().collect();
         let err = |msg: &str| Err(format!("{ctx}：{msg}"));
@@ -281,6 +283,15 @@ impl Command {
                 _ => err("call 用法：call *label / call 文件 *label"),
             },
             "return" if tokens.is_empty() => Ok(Command::Return),
+            // v0.3.5 宏系统：定义行是占位（宏体已由 lexer 收走）；erasemacro 删宏
+            "macro" | "endmacro" => Ok(Command::MacroDefSkip),
+            "erasemacro" => match tokens.as_slice() {
+                [n] => Ok(Command::EraseMacro(n.to_string())),
+                _ => err("erasemacro 用法：erasemacro 宏名"),
+            },
+            // v0.3.5 变量清理：f.*/sf.* 清表（global.json 结构不变）
+            "clearvar" if tokens.is_empty() => Ok(Command::ClearVar),
+            "clearsysvar" if tokens.is_empty() => Ok(Command::ClearSysVar),
             "input" => {
                 let (v, tail) = rest
                     .split_once(' ')

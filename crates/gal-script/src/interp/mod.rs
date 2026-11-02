@@ -5,6 +5,7 @@
 mod blocks;
 pub(crate) mod exec;
 mod history;
+mod macros;
 mod types;
 
 #[cfg(test)]
@@ -27,6 +28,10 @@ use gal_text::writer::{ClickResult, Typewriter};
 const MAX_STEPS: usize = 10_000;
 /// call 嵌套上限（防子程序自递归撑爆内存）
 const MAX_CALL_DEPTH: usize = 64;
+/// v0.3.5 宏展开嵌套上限（宏 A 里调宏 B…防递归宏撑爆）
+const MAX_MACRO_DEPTH: usize = 16;
+/// v0.3.5 branch_taken 的作用域键：0 = 主剧本（文件+行下标），1..= 宏帧序号
+type ScopeId = usize;
 
 pub struct Interp {
     pub(crate) scripts: HashMap<String, Vec<Line>>,
@@ -38,9 +43,17 @@ pub struct Interp {
     /// v0.3.4 if 行下标 → elsif 链（文件名 → 表）
     pub(crate) elsif_chains: HashMap<String, ElsIfChains>,
     /// v0.3.4 已命中分支的 if 行栈（elsif/else 靠它识别「跳过我」；endif 弹栈）
-    pub(crate) branch_taken: Vec<usize>,
+    /// v0.3.5 元素带作用域：(作用域, if 行下标)——宏体与主剧本行号空间独立
+    pub(crate) branch_taken: Vec<(ScopeId, usize)>,
     /// call 调用栈：(文件, 返回位置)。只存运行期，不进存档
     pub(crate) call_stack: Vec<(String, usize)>,
+    /// v0.3.5 宏表：宏名 → 宏体行（load 阶段从 MacroDef 行注册）
+    pub(crate) macros: HashMap<String, Vec<Line>>,
+    /// v0.3.5 宏表（按文件快照）：erasemacro 之类需知道宏来自哪份剧本（当前全局表即够用）
+    /// 宏调用帧栈：每帧 = (宏名, 已代入的宏体行, 体内心行)。先于主剧本行执行。
+    pub(crate) macro_stack: Vec<MacroFrame>,
+    /// v0.3.5 宏帧计数器（分配作用域 id；只增不减保证唯一）
+    pub(crate) macro_scope_seq: ScopeId,
     pub(crate) file: String,
     pub(crate) pc: usize,
     /// 当前等待点所在行（存档恢复用：重执行该行即恢复画面+台词）
@@ -78,6 +91,17 @@ pub struct Interp {
     pub trans_enabled: bool,
 }
 
+/// v0.3.5 宏调用帧：已代入 %attr 的宏体行（克隆自宏表）+ 体内行游标 + 作用域 id
+pub(crate) struct MacroFrame {
+    pub name: String,
+    pub body: Vec<Line>,
+    pub pc: usize,
+    /// branch_taken 作用域键（宏体 if 块用）
+    pub scope: ScopeId,
+    /// 主剧本里的调用行下标（等待点落宏体里时记它，读档重放）
+    pub call_pc: usize,
+}
+
 impl Interp {
     pub fn new(vars: Vars, typewriter_ms: f32, hero_default: &str, you_default: &str) -> Self {
         Self {
@@ -88,6 +112,9 @@ impl Interp {
             elsif_chains: HashMap::new(),
             branch_taken: Vec::new(),
             call_stack: Vec::new(),
+            macros: HashMap::new(),
+            macro_stack: Vec::new(),
+            macro_scope_seq: 0,
             file: String::new(),
             pc: 0,
             stop_line: None,
@@ -152,6 +179,28 @@ impl Interp {
             .map_err(|e| format!("剧本文件读取失败：{path}（{e}）"))?;
         let src = src.trim_start_matches('\u{feff}'); // 剥 BOM
         let lines = lexer::parse_script(src).map_err(|e| format!("{file}：{e}"))?;
+        // v0.3.5 宏定义先摘出来注册（宏体不参与主剧本 if 配对——它有自己的行空间）
+        let mut macros: Vec<(String, Vec<Line>)> = Vec::new();
+        let lines: Vec<Line> = lines
+            .into_iter()
+            .filter_map(|l| match l.kind {
+                LineKind::MacroDef { name, body } => {
+                    macros.push((name, body));
+                    None // MacroDef 行在主剧本里只是占位（执行到即跳过），不下发
+                }
+                _ => Some(l),
+            })
+            .collect();
+        for (name, body) in macros {
+            // 宏体行空间独立：块配对表挂在「macro:宏名」键下（scope_file 同口径）
+            let key = format!("macro:{name}");
+            let (mb, me, mc) =
+                blocks::pair(&body).map_err(|e| format!("{file}：宏「{name}」{e}"))?;
+            self.blocks.insert(key.clone(), mb);
+            self.else_targets.insert(key.clone(), me);
+            self.elsif_chains.insert(key, mc);
+            self.macros.insert(name, body);
+        }
         // if/else/endif 配对在加载时一次算好，执行期只查表
         let (blocks, else_targets, chains) =
             blocks::pair(&lines).map_err(|e| format!("{file}：{e}"))?;
@@ -298,26 +347,76 @@ impl Interp {
 
     fn run_until_wait_inner(&mut self) -> Result<(), String> {
         for _ in 0..MAX_STEPS {
-            let lines = match self.scripts.get(&self.file) {
-                Some(l) => l,
-                None => return Err(format!("剧本未加载：{}", self.file)),
+            // v0.3.5 宏帧优先：栈顶宏体还有行就先执行宏体行
+            let line: Line = if let Some(fr) = self.macro_stack.last_mut() {
+                if fr.pc < fr.body.len() {
+                    let l = fr.body[fr.pc].clone();
+                    fr.pc += 1;
+                    // pc 同步为宏体内下标：指令里的 `self.pc - 1`（if 块跳转表等）
+                    // 才能对上「macro:名」键下的宏体行空间
+                    self.pc = fr.pc;
+                    l
+                } else {
+                    // 宏体执行完：弹帧，恢复主剧本 pc，清掉该作用域残留的命中分支标记
+                    let fr = self.macro_stack.pop().unwrap();
+                    self.pc = fr.call_pc + 1;
+                    self.branch_taken.retain(|(s, _)| *s != fr.scope);
+                    continue;
+                }
+            } else {
+                let lines = match self.scripts.get(&self.file) {
+                    Some(l) => l,
+                    None => return Err(format!("剧本未加载：{}", self.file)),
+                };
+                if self.pc >= lines.len() {
+                    self.state = RunState::Ended;
+                    return Ok(());
+                }
+                let l = lines[self.pc].clone();
+                self.pc += 1;
+                l
             };
-            if self.pc >= lines.len() {
-                self.state = RunState::Ended;
-                return Ok(());
-            }
-            let line = &lines[self.pc];
-            self.pc += 1;
             if matches!(line.kind, LineKind::Label(_)) {
                 continue;
             }
             let ctx = format!("{}:{}", self.file, line.no);
-            let cmd = Command::parse(&line.kind, &ctx)?;
-            if self.exec(cmd, &ctx)? {
-                self.stop_line = Some(self.pc - 1);
+            // v0.3.5 宏调用：Command::parse 认不出的指令名若在宏表里 → 展开压帧
+            let cmd = match Command::parse(&line.kind, &ctx) {
+                Ok(c) => c,
+                Err(e) if e.contains("未知指令") => match self.try_expand_macro(&line, &ctx) {
+                    Ok(true) => continue,
+                    Ok(false) => return Err(e),
+                    Err(me) => return Err(me),
+                },
+                Err(e) => return Err(e),
+            };
+            let hit_wait = self.exec(cmd, &ctx)?;
+            // 块跳转（if/elsif/else/endif、jump）写的是 self.pc：宏体执行期把它写回帧游标
+            if let Some(fr) = self.macro_stack.last_mut() {
+                fr.pc = self.pc;
+            }
+            if hit_wait {
+                // 等待点落在宏体里：停点记宏调用行（读档重放调用处，语义与重放等待行一致）
+                self.stop_line = Some(match self.macro_stack.first() {
+                    Some(fr) => fr.call_pc,
+                    None => self.pc - 1,
+                });
                 return Ok(());
             }
         }
         Err(format!("连续执行超过 {MAX_STEPS} 条（{}）：疑似 label 死循环", self.file))
+    }
+
+    /// 当前块配对作用域的键：主剧本用文件名，宏体用 macro:宏名（blocks 三表统一按此键存查）
+    pub(crate) fn scope_file(&self) -> String {
+        match self.macro_stack.last() {
+            Some(fr) => format!("macro:{}", fr.name),
+            None => self.file.clone(),
+        }
+    }
+
+    /// v0.3.5 branch_taken 的当前作用域 id（0 = 主剧本）
+    pub(crate) fn cur_scope(&self) -> ScopeId {
+        self.macro_stack.last().map(|f| f.scope).unwrap_or(0)
     }
 }

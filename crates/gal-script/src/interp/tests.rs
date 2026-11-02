@@ -405,3 +405,133 @@ fn trace求值内联且不支持时原样保留() {
     // 求值失败的表达式：不报错（trace 是诊断通道，不中断演出）
     it.exec(Command::Trace { text: "坏字段 %f.n ?? x".into() }, "t:2").unwrap();
 }
+
+// ── v0.3.5：宏系统（定义/展开/删除）+ ignore + clearvar/clearsysvar ────────
+
+use crate::lexer::LineKind;
+use crate::RunState;
+
+/// 装载剧本（宏注册走真实 load 路径：写临时剧本文件不可行，这里手动建表）
+fn load_full(it: &mut Interp, file: &str, src: &str) {
+    let lines = crate::lexer::parse_script(src).unwrap();
+    // 摘宏定义（与 Interp::load 同口径）
+    let mut macros = Vec::new();
+    let lines: Vec<_> = lines
+        .into_iter()
+        .filter_map(|l| match l.kind {
+            LineKind::MacroDef { name, body } => {
+                macros.push((name, body));
+                None
+            }
+            _ => Some(l),
+        })
+        .collect();
+    for (n, b) in macros {
+        // 宏体块配对挂「macro:宏名」键（与 Interp::load 同口径）
+        let key = format!("macro:{n}");
+        let (mb, me, mc) = crate::interp::blocks::pair(&b).unwrap();
+        it.blocks.insert(key.clone(), mb);
+        it.elsif_chains.insert(key.clone(), mc);
+        it.else_targets.insert(key, me);
+        it.macros.insert(n, b);
+    }
+    it.scripts.insert(file.into(), lines.clone());
+    let (blocks, elses, chains) = crate::interp::blocks::pair(&lines).unwrap();
+    it.blocks.insert(file.into(), blocks);
+    it.elsif_chains.insert(file.into(), chains);
+    it.else_targets.insert(file.into(), elses);
+    it.labels.insert((file.into(), "start".into()), 0);
+    // 启动错误（如递归宏防护）不 unwrap：由用例自行断言 error/Ended
+    let _ = it.start(file, None);
+}
+
+#[test]
+fn v035_宏定义与调用展开() {
+    let mut it = interp();
+    load_full(
+        &mut it,
+        "m.ks",
+        "*start\nmacro greet\neval f.greeted = f.greeted + 1\nn 问候 %who 次数 %n\nendmacro\neval f.greeted = 0\ngreet who=夏 n=2\ngreet\nn 结束\n",
+    );
+    // 第一次调用：属性代入（who=夏 n=2）
+    assert_eq!(it.vars.get("f.greeted"), Some(&Value::Int(1)));
+    assert_eq!(it.pending_text.as_deref(), Some("问候 夏 次数 2"));
+    // 第二次调用：未传属性按空串代入（KAG3 缺省口径，不崩演出）
+    it.click().unwrap();
+    assert_eq!(it.vars.get("f.greeted"), Some(&Value::Int(2)));
+    assert_eq!(it.pending_text.as_deref(), Some("问候  次数 "));
+    it.click().unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("结束"));
+}
+
+#[test]
+fn v035_宏属性代入与缺省() {
+    let mut it = interp();
+    load_full(
+        &mut it,
+        "m2.ks",
+        "*start\nmacro hit\neval f.total = f.total + %dmg\nendmacro\neval f.total = 0\nhit dmg=7\nhit dmg=5\n",
+    );
+    // 7 + 5
+    assert_eq!(it.vars.get("f.total"), Some(&Value::Int(12)));
+}
+
+#[test]
+fn v035_宏内if块与嵌套宏调用() {
+    let mut it = interp();
+    load_full(
+        &mut it,
+        "m3.ks",
+        "*start\nmacro inner\neval f.log = f.log + \"i\"\nendmacro\nmacro outer\ninner\ninner\nif %flag == 1\neval f.log = f.log + \"T\"\nelse\neval f.log = f.log + \"F\"\nendif\nendmacro\neval f.log = \"\"\nouter flag=0\nn 完成\n",
+    );
+    // 宏体内 if 块走 else 分支（flag=0）；嵌套宏调用 inner 执行两次
+
+    assert_eq!(it.vars.get("f.log"), Some(&Value::Str("iiF".into())));
+    assert_eq!(it.pending_text.as_deref(), Some("完成"));
+}
+
+#[test]
+fn v035_递归宏防护() {
+    let mut it = interp();
+    load_full(&mut it, "m4.ks", "*start\nmacro loop_a\nloop_a\nn 不该到这\nendmacro\nloop_a\n");
+    // 递归展开在深度上限处报错（不崩进程，error 留证 + Ended）
+    assert!(it.error.is_some());
+    assert_eq!(it.state, RunState::Ended);
+}
+
+#[test]
+fn v035_erasemacro删除() {
+    let mut it = interp();
+    load_full(&mut it, "m5.ks", "*start\nmacro gone\nn 旧宏\nendmacro\nerasemacro gone\nn 结束\n");
+    assert!(!it.macros.contains_key("gone"));
+    assert_eq!(it.pending_text.as_deref(), Some("结束"));
+}
+
+#[test]
+fn v035_ignore块与clearvar() {
+    let mut it = interp();
+    it.vars.set("f.keep", Value::Int(1));
+    it.vars.set("sf.game", Value::Str("x".into()));
+    load_full(
+        &mut it,
+        "m6.ks",
+        "*start\nignore\nn 注释块里的台词（不执行）\neval f.keep = 99\nendignore\nclearvar\nn 清完\n",
+    );
+    // ignore 块内 eval 未执行；clearvar 清了 f.*（含脚本外的 keep）
+    assert_eq!(it.vars.get("f.keep"), None);
+    assert_eq!(it.pending_text.as_deref(), Some("清完"));
+    // sf 不受 clearvar 影响
+    assert_eq!(it.vars.get("sf.game"), Some(&Value::Str("x".into())));
+}
+
+#[test]
+fn v035_clearsysvar清sf() {
+    let mut it = interp();
+    it.vars.set("sf.a", Value::Int(1));
+    it.vars.set("sf.b", Value::Str("t".into()));
+    it.vars.set("f.c", Value::Int(2));
+    it.exec(Command::ClearSysVar, "t:1").unwrap();
+    assert_eq!(it.vars.get("sf.a"), None);
+    assert_eq!(it.vars.get("sf.b"), None);
+    assert_eq!(it.vars.get("f.c"), Some(&Value::Int(2)));
+}
