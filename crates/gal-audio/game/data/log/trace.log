@@ -1,0 +1,56 @@
+[    0.007s] voice play name=ding
+[    0.007s] voice miss name=ding dir=voice
+[    0.007s] se play name=ding fade_in_ms=0 fade_out_ms=0 target=1
+[    0.007s] se miss name=ding dir=sound
+[    0.005s] se stop name=(all)
+[    0.005s] se stop name=click
+[    0.013s] bgm play name=theme fade_in_ms=0 fade_out_ms=0 xchg=false
+[    0.014s] bgm miss name=theme dir=bgm
+[    0.014s] bgm pause
+[    0.014s] bgm resume
+[    0.014s] bgm fadeout ms=100
+[    0.014s] bgm stop
+[    0.014s] bgm play name=other fade_in_ms=200 fade_out_ms=200 xchg=true
+[    0.014s] bgm miss name=other dir=bgm
+[    0.014s] se play name=click fade_in_ms=0 fade_out_ms=0 target=1
+[    0.014s] se miss name=click dir=sound
+[    0.014s] se stop name=(all)
+[    0.014s] voice play name=hero01
+[    0.014s] voice miss name=hero01 dir=voice
+[    0.014s] voice stop
+[    0.015s] bgm play name=不存在曲 fade_in_ms=0 fade_out_ms=0 xchg=false
+[    0.015s] bgm miss name=不存在曲 dir=bgm
+[    0.015s] se play name=不存在音效 fade_in_ms=0 fade_out_ms=0 target=1
+[    0.015s] se miss name=不存在音效 dir=sound
+[    0.015s] voice play name=不存在语音
+[    0.015s] voice miss name=不存在语音 dir=voice
+[    0.004s] se stop name=(all)
+[    0.004s] se stop name=click
+[    0.005s] bgm opt loop_start_ms=2000 loop_end_ms=1000
+[    0.005s] bgm opt loop_start_ms=0 loop_end_ms=0
+[    0.005s] bgm opt loop_start_ms=100 loop_end_ms=2000
+[    0.005s] voice play name=ding
+[    0.005s] voice miss name=ding dir=voice
+[    0.005s] se play name=ding fade_in_ms=0 fade_out_ms=0 target=1
+[    0.005s] se miss name=ding dir=sound
+[    0.005s] bgm play name=theme fade_in_ms=0 fade_out_ms=0 xchg=false
+[    0.006s] bgm miss name=theme dir=bgm
+[    0.006s] bgm pause
+[    0.006s] bgm resume
+[    0.006s] bgm fadeout ms=100
+[    0.006s] bgm stop
+[    0.006s] bgm play name=other fade_in_ms=200 fade_out_ms=200 xchg=true
+[    0.006s] bgm miss name=other dir=bgm
+[    0.006s] se play name=click fade_in_ms=0 fade_out_ms=0 target=1
+[    0.006s] se miss name=click dir=sound
+[    0.006s] se stop name=(all)
+[    0.006s] voice play name=hero01
+[    0.006s] voice miss name=hero01 dir=voice
+[    0.006s] voice stop
+[    0.006s] test probe k=v
+[    0.007s] bgm play name=不存在曲 fade_in_ms=0 fade_out_ms=0 xchg=false
+[    0.007s] bgm miss name=不存在曲 dir=bgm
+[    0.007s] se play name=不存在音效 fade_in_ms=0 fade_out_ms=0 target=1
+[    0.007s] se miss name=不存在音效 dir=sound
+[    0.007s] voice play name=不存在语音
+[    0.007s] voice miss name=不存在语音 dir=voice

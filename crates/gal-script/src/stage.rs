@@ -47,9 +47,12 @@ impl LayerKind {
 pub struct Layer {
     pub cur: Option<String>,
     pub prev: Option<String>,
+    /// v0.3.6 back 页（KAG3 fore/back 双页模型）：`backlay` / 无参 `trans` 的
+    /// 目标页。平时不绘制，`trans`（无 layer 前缀形态）时与 fore 页交叉。
+    pub back: Option<String>,
     pub t: f32,
     pub dur: f32,
-    /// 绘制偏移（char 指令 x y 参数；自由层 move 将来复用）
+    /// 绘制偏移（char 指令 x y 参数；move 动画改写）
     pub offset: (i32, i32),
     /// 是否Q版立绘（名单见 game.yaml sprites.chibi；在场时背景虚化）
     pub chibi: bool,
@@ -109,6 +112,9 @@ pub struct StageSnap {
     /// 自由层（层号 → 素材路径）；旧档无此字段 = 空
     #[serde(default)]
     pub layers: Vec<(usize, String)>,
+    /// v0.3.6 back 页（层号 → 素材路径；旧档无此字段 = 全空）
+    #[serde(default)]
+    pub backs: Vec<(usize, String)>,
     /// 自由层的绘制偏移（与 layers 对应；旧档无此字段 = 空）
     #[serde(default)]
     pub layer_offsets: Vec<(usize, i32, i32)>,
@@ -204,6 +210,54 @@ pub struct TransClip {
     pub left_ms: f32,
 }
 
+/// v0.3.6 位移动画片段（KAG3 `move` 标签 + `wa`/`animstop`）：
+/// 关键帧序列按时间线性插值，驱动 `Layer.offset`。
+#[derive(Clone, Debug)]
+pub struct MoveClip {
+    /// 目标层
+    pub layer: usize,
+    /// 关键帧 (时间ms, x, y)，时间升序；t=0 缺省帧由 start_move 补当前 offset
+    pub frames: Vec<(u32, i32, i32)>,
+    /// 总时长 = 末帧时间
+    pub dur_ms: u32,
+    pub left_ms: u32,
+}
+
+impl MoveClip {
+    /// 当前进度（0.0-1.0）
+    pub fn progress(&self) -> f32 {
+        if self.dur_ms == 0 {
+            return 1.0;
+        }
+        (1.0 - self.left_ms as f32 / self.dur_ms as f32).clamp(0.0, 1.0)
+    }
+
+    /// 按进度线性插值的当前偏移
+    pub fn offset_at(&self, progress: f32) -> (i32, i32) {
+        let t = progress * self.dur_ms as f32;
+        let mut i = 0;
+        while i + 1 < self.frames.len() && self.frames[i + 1].0 as f32 <= t {
+            i += 1;
+        }
+        if i + 1 >= self.frames.len() {
+            let f = self.frames.last().copied().unwrap_or((0, 0, 0));
+            return (f.1, f.2);
+        }
+        let (t0, x0, y0) = self.frames[i];
+        let (t1, x1, y1) = self.frames[i + 1];
+        let span = (t1 - t0).max(1) as f32;
+        let k = ((t - t0 as f32) / span).clamp(0.0, 1.0);
+        (
+            (x0 as f32 + (x1 - x0) as f32 * k).round() as i32,
+            (y0 as f32 + (y1 - y0) as f32 * k).round() as i32,
+        )
+    }
+
+    pub fn done(&self) -> bool {
+        self.left_ms == 0
+    }
+}
+
 impl TransClip {
     /// 新内容透明度（0 → 1 线性）
     pub fn alpha(&self) -> f32 {
@@ -262,6 +316,8 @@ pub struct Stage {
     pub sway: [Option<Sway>; 3],
     /// 在途转场（P1-1；同一时刻只做一段，KAG3 也是一段一段排队）
     pub trans: Option<TransClip>,
+    /// v0.3.6 在途位移动画（各层独立；`move` 触发，`wa` 等待，`animstop` 取消）
+    pub moves: Vec<MoveClip>,
 }
 
 impl Default for Stage {
@@ -272,7 +328,12 @@ impl Default for Stage {
 
 impl Stage {
     pub fn new() -> Self {
-        Self { layers: vec![Layer::default(); DEFAULT_LAYERS], sway: [None; 3], trans: None }
+        Self {
+            layers: vec![Layer::default(); DEFAULT_LAYERS],
+            sway: [None; 3],
+            trans: None,
+            moves: Vec::new(),
+        }
     }
 
     /// 层号对应的层（越界返回 None，调用方决定扩层或报错）
@@ -389,6 +450,67 @@ impl Stage {
         }
     }
 
+    /// v0.3.6 backlay（KAG3）：把 fore 页当前内容复制到 back 页。
+    /// `hide` 清空 back 页。back 页只在随后「无 layer 前缀的 trans」中作目标页。
+    pub fn backlay(&mut self, n: usize, hide: bool) -> Result<(), String> {
+        self.ensure_layer(n)?;
+        self.layers[n].back = if hide { None } else { self.layers[n].cur.clone() };
+        Ok(())
+    }
+
+    /// v0.3.6 copylay（KAG3）：把 from 层的 fore 页内容复制到 to 层 fore 页（0ms 直切）。
+    pub fn copylay(&mut self, from: usize, to: usize, dur_ms: u32) -> Result<(), String> {
+        self.ensure_layer(from)?;
+        self.ensure_layer(to)?;
+        let src = self.layers[from].cur.clone();
+        self.layers[to].set(src, dur_ms);
+        Ok(())
+    }
+
+    /// v0.3.6 开始一段位移动画（KAG3 `move`）：frames 时间升序。
+    /// t=0 缺省帧补当前 offset；重复调用覆盖同层在途动画。
+    pub fn start_move(&mut self, n: usize, mut frames: Vec<(u32, i32, i32)>) -> Result<(), String> {
+        self.ensure_layer(n)?;
+        if frames.is_empty() {
+            return Err(format!("层 {n}：move 关键帧为空"));
+        }
+        if frames[0].0 != 0 {
+            let cur = self.layers[n].offset;
+            frames.insert(0, (0, cur.0, cur.1));
+        }
+        let dur_ms = frames.last().map(|f| f.0).unwrap_or(0);
+        self.layers[n].offset = (frames[0].1, frames[0].2);
+        self.moves.retain(|m| m.layer != n);
+        self.moves.push(MoveClip { layer: n, frames, dur_ms, left_ms: dur_ms });
+        Ok(())
+    }
+
+    /// v0.3.6 在途位移动画的剩余时长（取各层最长；无在途 = None，`wa` 语义）
+    pub fn move_left_ms(&self) -> Option<u32> {
+        self.moves.iter().map(|m| m.left_ms).max()
+    }
+
+    /// v0.3.6 animstop：取消层 n 的在途动画，offset 停在当前位置
+    pub fn stop_move(&mut self, n: usize) {
+        self.moves.retain(|m| m.layer != n);
+    }
+
+    /// v0.3.6 消费在途 move：写回各层 offset，完成即摘除
+    fn tick_moves(&mut self, dt_ms: u32) {
+        for m in &mut self.moves {
+            m.left_ms = m.left_ms.saturating_sub(dt_ms);
+            let off = m.offset_at(m.progress());
+            if let Some(l) = self.layers.get_mut(m.layer) {
+                l.offset = off;
+            }
+        }
+        let done: Vec<usize> =
+            self.moves.iter().enumerate().filter(|(_, m)| m.done()).map(|(i, _)| i).collect();
+        for i in done.into_iter().rev() {
+            self.moves.swap_remove(i);
+        }
+    }
+
     /// 开始一段转场（P1-1）：层 `n` 从当前内容切到 `to`，`dur_ms` 内交叉淡化。
     ///
     /// 立刻把 `Layer.cur` 设成新内容（存档语义 = 转场后的状态），旧内容定格在
@@ -417,6 +539,7 @@ impl Stage {
             l.tick(dt_ms);
         }
         self.tick_sway(dt_ms);
+        self.tick_moves(dt_ms.round().max(0.0) as u32);
         if let Some(t) = &mut self.trans {
             t.left_ms = (t.left_ms - dt_ms).max(0.0);
             if t.left_ms <= 0.0 {
@@ -428,6 +551,7 @@ impl Stage {
     /// 存档快照
     pub fn snapshot(&self) -> StageSnap {
         let mut layers = Vec::new();
+        let mut backs = Vec::new();
         let mut layer_offsets = Vec::new();
         for (i, l) in self.layers.iter().enumerate() {
             // 0..=4 走专用字段，自由层进 layers
@@ -440,6 +564,16 @@ impl Stage {
                     layer_offsets.push((i, l.offset.0, l.offset.1));
                 }
             }
+            // v0.3.6 back 页也进快照（存档 = 转场后状态，含待转 back 页）
+            if let Some(p) = &l.back {
+                backs.push((i, p.clone()));
+            }
+        }
+        // 0..=4 的 back 页：非空才记（键即层号）
+        for i in 0..=CG_LAYER {
+            if let Some(p) = &self.layers[i].back {
+                backs.push((i, p.clone()));
+            }
         }
         StageSnap {
             bg: self.bg().cur().cloned(),
@@ -447,6 +581,7 @@ impl Stage {
             char_offsets: [0, 1, 2].map(|i| self.char(i).offset),
             cg: self.cg().cur().cloned(),
             layers,
+            backs,
             layer_offsets,
             // 默认层序就是层号升序；只有被 `layer z` 改过才需要记录（此处恒为空，
             // 保留字段是为了旧档/新档结构稳定，等 layer z 落地再填）
@@ -469,10 +604,21 @@ impl Stage {
         // 自由层：先清空 5..，再按快照填回（旧档 layers 为空 → 全部清空）
         for l in self.layers.iter_mut().skip(FREE_LAYER_FIRST) {
             l.set(None, 0);
+            l.back = None;
+        }
+        for l in self.layers.iter_mut().take(FREE_LAYER_FIRST) {
+            l.back = None;
         }
         self.trans = None;
+        self.moves.clear();
         for (n, path) in snap.layers {
             let _ = self.set_layer(n, Some(path), 0);
+        }
+        // v0.3.6 back 页恢复
+        for (n, path) in snap.backs {
+            if let Some(l) = self.layers.get_mut(n) {
+                l.back = Some(path);
+            }
         }
         for (n, x, y) in snap.layer_offsets {
             if let Some(l) = self.layers.get_mut(n) {
@@ -488,6 +634,9 @@ impl Stage {
                 out.insert(p.clone());
             }
             if let Some(p) = &layer.prev {
+                out.insert(p.clone());
+            }
+            if let Some(p) = &layer.back {
                 out.insert(p.clone());
             }
         }
@@ -563,6 +712,94 @@ mod tests {
         assert_eq!(s.bg().cur.as_deref(), Some("bg/a"));
         assert_eq!(s.char(0).cur.as_deref(), Some("char/a"));
         assert!(s.layer(FREE_LAYER_FIRST).unwrap().cur.is_none());
+    }
+
+    // ── v0.3.6 back 页 + move 动画 ─────────────────────────────
+
+    #[test]
+    fn backlay复制fore页且hide清空() {
+        let mut s = Stage::new();
+        s.set_layer(0, Some("bg/a".into()), 0).unwrap();
+        s.backlay(0, false).unwrap();
+        assert_eq!(s.layers[0].back.as_deref(), Some("bg/a"));
+        // 换 fore 页不影响 back 页
+        s.set_layer(0, Some("bg/b".into()), 0).unwrap();
+        assert_eq!(s.layers[0].back.as_deref(), Some("bg/a"));
+        s.backlay(0, true).unwrap();
+        assert!(s.layers[0].back.is_none());
+    }
+
+    #[test]
+    fn copylay整层复制() {
+        let mut s = Stage::new();
+        s.set_layer(4, Some("cg/x".into()), 0).unwrap();
+        s.copylay(4, 5, 0).unwrap();
+        assert_eq!(s.layer(5).unwrap().cur.as_deref(), Some("cg/x"));
+    }
+
+    #[test]
+    fn move动画插值与wa剩余() {
+        let mut s = Stage::new();
+        s.set_layer(5, Some("free/a".into()), 0).unwrap();
+        s.layers[5].offset = (100, 0);
+        s.start_move(5, vec![(500, -50, 20)]).unwrap();
+        // t=0 补帧：从当前 offset 起步
+        assert_eq!(s.moves[0].frames[0], (0, 100, 0));
+        s.tick(250.0);
+        assert_eq!(s.layers[5].offset, (25, 10));
+        s.tick(250.0);
+        assert_eq!(s.layers[5].offset, (-50, 20));
+        assert!(s.moves.is_empty());
+        assert_eq!(s.move_left_ms(), None);
+    }
+
+    #[test]
+    fn move多关键帧与animstop停在当前位置() {
+        let mut s = Stage::new();
+        s.start_move(6, vec![(0, 0, 0), (400, 80, 0), (800, 80, 40)]).unwrap();
+        assert_eq!(s.move_left_ms(), Some(800));
+        s.tick(400.0);
+        assert_eq!(s.layers[6].offset, (80, 0));
+        s.stop_move(6);
+        assert!(s.moves.is_empty());
+        assert_eq!(s.layers[6].offset, (80, 0));
+        // 同层重复 move 覆盖在途动画
+        s.start_move(6, vec![(100, 0, 0)]).unwrap();
+        s.start_move(6, vec![(200, 9, 9)]).unwrap();
+        assert_eq!(s.moves.len(), 1);
+        assert_eq!(s.moves[0].dur_ms, 200);
+    }
+
+    #[test]
+    fn move存档后offset保留且动画不进快照() {
+        let mut s = Stage::new();
+        s.set_layer(7, Some("free/b".into()), 0).unwrap();
+        s.start_move(7, vec![(0, 0, 0), (100, 10, 10)]).unwrap();
+        s.tick(60.0);
+        let snap = s.snapshot();
+        let mut r = Stage::new();
+        r.restore(snap);
+        // 存档语义 = 瞬时状态：offset 保留、动画取消
+        assert_eq!(r.layers[7].offset.0, 6);
+        assert!(r.moves.is_empty());
+    }
+
+    #[test]
+    fn back页进存档快照往返() {
+        let mut s = Stage::new();
+        s.set_layer(0, Some("bg/a".into()), 0).unwrap();
+        s.backlay(0, false).unwrap();
+        s.set_layer(8, Some("free/c".into()), 0).unwrap();
+        s.backlay(8, false).unwrap();
+        let mut r = Stage::new();
+        r.restore(s.snapshot());
+        assert_eq!(r.layers[0].back.as_deref(), Some("bg/a"));
+        assert_eq!(r.layer(8).unwrap().back.as_deref(), Some("free/c"));
+        // 旧档（无 backs 字段）恢复后 back 全空
+        let legacy: StageSnap =
+            serde_json::from_str(r#"{"bg":"bg/x","chars":[null,null,null],"cg":null}"#).unwrap();
+        r.restore(legacy);
+        assert!(r.layers.iter().all(|l| l.back.is_none()));
     }
 
     #[test]

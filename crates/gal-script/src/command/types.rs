@@ -51,6 +51,29 @@ pub enum Command {
     },
     /// 等待在途转场结束（KAG3 `wt` 的转场形态）
     WaitTrans,
+    // ===== v0.3.6 fore/back 双页 + 位移动画 =====
+    /// backlay [层]：fore 页内容复制到 back 页（`backlay hide` 清空）
+    BackLay {
+        n: Option<u8>,
+        hide: bool,
+    },
+    /// copylay from to [ms]：from 层 fore 页复制到 to 层 fore 页
+    CopyLay {
+        from: u8,
+        to: u8,
+        dur_ms: u32,
+    },
+    /// move 层 x,y[@ms] …：关键帧位移动画（时间升序，帧间线性插值）
+    Move {
+        n: u8,
+        frames: Vec<(u32, i32, i32)>,
+    },
+    /// wa：等全部在途位移动画结束
+    WaitMove,
+    /// animstop [层]：取消在途动画（无参=全部层）
+    AnimStop {
+        n: Option<u8>,
+    },
     // ===== v0.3.3 KAG3 等待标签（wm/wv/wp）=====
     /// wm：等 BGM 播完
     WaitMusic,

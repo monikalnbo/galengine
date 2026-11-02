@@ -535,3 +535,54 @@ fn v035_clearsysvar清sf() {
     assert_eq!(it.vars.get("sf.b"), None);
     assert_eq!(it.vars.get("f.c"), Some(&Value::Int(2)));
 }
+
+// ── v0.3.6：fore/back 双页（backlay/copylay）+ move/wa/animstop ────────────
+
+#[test]
+fn v036_backlay与copylay经指令执行() {
+    let mut it = interp();
+    it.stage.set_layer(0, Some("bg/a".into()), 0).unwrap();
+    it.exec(Command::BackLay { n: Some(0), hide: false }, "t:1").unwrap();
+    assert_eq!(it.stage.layers[0].back.as_deref(), Some("bg/a"));
+    it.stage.set_layer(4, Some("cg/k".into()), 0).unwrap();
+    it.exec(Command::CopyLay { from: 4, to: 7, dur_ms: 0 }, "t:2").unwrap();
+    assert_eq!(it.stage.layer(7).unwrap().cur.as_deref(), Some("cg/k"));
+    // backlay hide 清空
+    it.exec(Command::BackLay { n: Some(0), hide: true }, "t:3").unwrap();
+    assert!(it.stage.layers[0].back.is_none());
+}
+
+#[test]
+fn v036_move等待与animstop() {
+    let mut it = interp();
+    it.stage.set_layer(5, Some("free/a".into()), 0).unwrap();
+    it.exec(Command::Move { n: 5, frames: vec![(0, 0, 0), (200, 40, 0)] }, "t:1").unwrap();
+    // wa：等动画结束
+    it.exec(Command::WaitMove, "t:2").unwrap();
+    assert!(matches!(it.state, RunState::WaitTimer { .. }));
+    it.stage.tick(200.0);
+    assert_eq!(it.stage.layers[5].offset, (40, 0));
+    // animstop 指定层：动画取消、offset 停在当前位置（无 t=0 帧 → 从当前位置起步）
+    it.exec(Command::Move { n: 5, frames: vec![(500, 99, 99)] }, "t:3").unwrap();
+    assert_eq!(it.stage.moves[0].frames[0], (0, 40, 0));
+    it.exec(Command::AnimStop { n: Some(5) }, "t:4").unwrap();
+    assert!(it.stage.moves.is_empty());
+    assert_eq!(it.stage.layers[5].offset, (40, 0));
+}
+
+#[test]
+fn v036_animstop无参取消全部() {
+    let mut it = interp();
+    it.stage.start_move(5, vec![(100, 5, 5)]).unwrap();
+    it.stage.start_move(6, vec![(100, 6, 6)]).unwrap();
+    it.exec(Command::AnimStop { n: None }, "t:1").unwrap();
+    assert!(it.stage.moves.is_empty());
+}
+
+#[test]
+fn v036_move无在途时wa直通() {
+    let mut it = interp();
+    // 无剧本可停在：wa 无在途动画时立即放行（不进 WaitTimer）
+    it.exec(Command::WaitMove, "t:1").unwrap();
+    assert!(!matches!(it.state, crate::interp::RunState::WaitTimer { .. }));
+}

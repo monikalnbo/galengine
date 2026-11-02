@@ -151,6 +151,56 @@ impl Command {
                 }),
                 _ => err("trans 用法：trans 层(0-63) 素材 [ms] [universal|crossfade]"),
             },
+            // ===== v0.3.6 fore/back 双页 + move 动画 =====
+            "backlay" => match tokens.as_slice() {
+                [] => Ok(Command::BackLay { n: None, hide: false }),
+                ["hide"] => Ok(Command::BackLay { n: None, hide: true }),
+                [n] => Ok(Command::BackLay { n: Some(layer_num(n, ctx)?), hide: false }),
+                [n, "hide"] => Ok(Command::BackLay { n: Some(layer_num(n, ctx)?), hide: true }),
+                _ => err("backlay 用法：backlay [层号] / backlay [层号] hide"),
+            },
+            "copylay" => match tokens.as_slice() {
+                [f, t] => Ok(Command::CopyLay {
+                    from: layer_num(f, ctx)?,
+                    to: layer_num(t, ctx)?,
+                    dur_ms: 0,
+                }),
+                [f, t, ms] => Ok(Command::CopyLay {
+                    from: layer_num(f, ctx)?,
+                    to: layer_num(t, ctx)?,
+                    dur_ms: num(ms)?,
+                }),
+                _ => err("copylay 用法：copylay 源层 目标层 [ms]"),
+            },
+            "move" if tokens.len() >= 2 => {
+                let n = layer_num(tokens[0], ctx)?;
+                let mut frames = Vec::new();
+                for t in &tokens[1..] {
+                    // 帧形态 x,y 或 x,y@ms（缺 @ms 延续上一帧时间，首个缺省 0）
+                    let (xy, ms) = match t.split_once('@') {
+                        Some((xy, ms)) => {
+                            let m = ms
+                                .parse::<u32>()
+                                .map_err(|_| format!("{ctx}：move 帧时间无效：{t}"))?;
+                            (xy, Some(m))
+                        }
+                        None => (*t, None),
+                    };
+                    let (x, y) = xy
+                        .split_once(',')
+                        .ok_or(format!("{ctx}：move 帧写法应为 x,y 或 x,y@ms：{t}"))?;
+                    let t_prev = frames.last().map(|f: &(u32, i32, i32)| f.0).unwrap_or(0);
+                    frames.push((ms.unwrap_or(t_prev), num(x)?, num(y)?));
+                }
+                Ok(Command::Move { n, frames })
+            }
+            // move 首参是层号：`move 层 x,y@ms …`
+            "wa" if tokens.is_empty() => Ok(Command::WaitMove),
+            "animstop" => match tokens.as_slice() {
+                [] => Ok(Command::AnimStop { n: None }),
+                [n] => Ok(Command::AnimStop { n: Some(layer_num(n, ctx)?) }),
+                _ => err("animstop 用法：animstop [层号]"),
+            },
             // ===== v0.3.2 KAG3 音频标签组 =====
             "playbgm" => match tokens.as_slice() {
                 [s] => Ok(Command::PlayBgm { name: s.to_string(), fade_in_ms: 0 }),
@@ -387,6 +437,14 @@ impl Command {
             )),
         }
     }
+}
+
+/// 通用层号（0-63），带行号中文报错（v0.3.6 backlay/copylay/move 用）
+fn layer_num(n: &str, ctx: &str) -> Result<u8, String> {
+    n.parse::<u8>()
+        .ok()
+        .filter(|n| (*n as usize) < crate::stage::MAX_LAYERS)
+        .ok_or(format!("{ctx}：层号必须是 0-{}", crate::stage::MAX_LAYERS - 1))
 }
 
 /// 立绘层号（0-2），越界给出带行号的中文错误

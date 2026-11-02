@@ -270,6 +270,44 @@ impl Interp {
                 }
                 Ok(false)
             }
+            // ===== v0.3.6 fore/back 双页 + move 动画 =====
+            Command::BackLay { n, hide } => {
+                let n = n.map(|x| x as usize).unwrap_or(crate::stage::BG_LAYER);
+                self.stage.backlay(n, hide)?;
+                Ok(false)
+            }
+            Command::CopyLay { from, to, dur_ms } => {
+                self.stage.copylay(from as usize, to as usize, dur_ms)?;
+                Ok(false)
+            }
+            Command::Move { n, frames } => {
+                self.stage.start_move(n as usize, frames)?;
+                Ok(false)
+            }
+            Command::WaitMove => match self.stage.move_left_ms() {
+                Some(left) => {
+                    self.state = RunState::WaitTimer { left_ms: left as f32 };
+                    Ok(true)
+                }
+                None => Ok(false),
+            },
+            Command::AnimStop { n } => {
+                match n {
+                    Some(n) => self.stage.stop_move(n as usize),
+                    None => {
+                        let ns: Vec<usize> = self.stage.moves.iter().map(|m| m.layer).collect();
+                        for n in ns {
+                            self.stage.stop_move(n);
+                        }
+                    }
+                }
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    &format!("[animstop] 已取消位移动画（{} 处）", n.is_some() as u8 + 1),
+                );
+                Ok(false)
+            }
             Command::WaitTrans => match self.stage.trans_left_ms() {
                 Some(left) => {
                     self.state = RunState::WaitTimer { left_ms: left };
