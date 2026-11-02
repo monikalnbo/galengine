@@ -92,7 +92,16 @@ pub fn draw(
         )?;
     }
 
-    menu::draw(canvas, fonts, &crate::overlay::title_items(), sel, t.menu_top_y, false)?;
+    menu::draw(
+        canvas,
+        fonts,
+        &conf.ui.menu,
+        &conf.ui.button,
+        &crate::overlay::title_items(conf),
+        sel,
+        t.menu_top_y,
+        false,
+    )?;
     Ok(())
 }
 

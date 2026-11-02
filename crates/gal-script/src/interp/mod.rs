@@ -54,6 +54,8 @@ pub struct Interp {
     pub(crate) hero_default: String,
     pub(crate) you_default: String,
     pub(crate) pending_text: Option<String>,
+    /// 当前台词全文（样式变更后按新字号/行距重排用）
+    pub(crate) cur_text: String,
     /// 立绘预设位置（game.yaml sprites.positions 注入；默认 left/center/right）
     pub positions: HashMap<String, SpritePos>,
     /// Q版立绘名单（sprites.chibi 注入；在场时背景虚化）
@@ -64,6 +66,8 @@ pub struct Interp {
     pub backlog: Vec<BacklogItem>,
     /// 最近一条剧本错误（未知指令/参数错误）：不中断游戏，由 UI 以 toast 提示
     pub error: Option<String>,
+    /// 是否启用 trans 转场（玩家 sf.transOn；L1 每帧注入）
+    pub trans_enabled: bool,
 }
 
 impl Interp {
@@ -88,11 +92,13 @@ impl Interp {
             hero_default: hero_default.into(),
             you_default: you_default.into(),
             pending_text: None,
+            cur_text: String::new(),
             positions: SpritesCfg::default().positions,
             chibi: std::collections::HashSet::new(),
             char_fade_ms: SpritesCfg::default().default_fade_ms,
             backlog: Vec::new(),
             error: None,
+            trans_enabled: true,
         }
     }
 
@@ -173,6 +179,7 @@ impl Interp {
         self.tw.clear();
         self.cur_name = None;
         self.pending_text = None;
+        self.cur_text.clear();
         // call 栈是运行期状态，读档后从栈底重新开始
         self.call_stack.clear();
         self.file = file.to_string();

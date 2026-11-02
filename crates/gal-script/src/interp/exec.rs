@@ -47,6 +47,14 @@ impl Interp {
                 self.events.push(SysEvent::Se(n));
                 Ok(false)
             }
+            Command::Voice(n) => {
+                self.events.push(SysEvent::Voice(n));
+                Ok(false)
+            }
+            Command::VoiceStop => {
+                self.events.push(SysEvent::VoiceStop);
+                Ok(false)
+            }
             Command::Char { layer, storage, x, y } => {
                 let next = if storage == "hide" { None } else { Some(resolve("char", &storage)) };
                 let l = self.stage.char_mut(layer as usize);
@@ -95,6 +103,9 @@ impl Interp {
                 Ok(false)
             }
             Command::Trans { n, storage, dur_ms, method } => {
+                // 玩家关掉转场（sf.transOn=0）：直接换图，不建转场片段
+                let dur_ms = if self.trans_enabled { dur_ms } else { 0 };
+                let method = if self.trans_enabled { method } else { "fade".to_string() };
                 let to = match storage.as_str() {
                     // hide 等价于淡出到空：旧内容作 from、目标为空，不换图
                     "hide" => String::new(),
@@ -134,6 +145,7 @@ impl Interp {
             },
             Command::Clear => {
                 self.tw.clear();
+                self.cur_text.clear();
                 self.cur_name = None;
                 Ok(false)
             }

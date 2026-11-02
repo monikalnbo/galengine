@@ -28,11 +28,17 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
     let ttf = sdl2::ttf::init().map_err(|e| format!("字体系统初始化失败：{e}"))?;
 
     let conf = config::load();
-    let mut canvas = make_canvas(&video, &conf.meta.title)?;
+    let mut canvas = make_canvas(&video, &conf)?;
     let creator = canvas.texture_creator();
     let mut renderer = Renderer::new(&creator)?;
     let mut bank = TextureBank::new(&creator, conf.display.bg_saturation);
-    let mut fonts = FontBook::new(&ttf, &creator, &conf.fonts)?;
+    let families: Vec<gal_text::font::Family> = conf
+        .text
+        .families
+        .iter()
+        .map(|f| gal_text::font::Family { name: f.name.clone(), path: f.path.clone() })
+        .collect();
+    let mut fonts = FontBook::new(&ttf, &creator, &conf.fonts, &families)?;
     let mut thumbs = gal_ui::savemenu::ThumbCache::new(&creator);
 
     // 全局变量（sf.*）加载 + 首次启动种子默认名
@@ -56,6 +62,8 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
     // 标题入口启动（不立即执行剧本；开始游戏/快读时才 start）
 
     let mut g = Game::new(conf, interp);
+    // 玩家设置（savedata/global.json）：音量/转场/字体族/字号行距/皮肤，启动即生效
+    g.apply_saved_settings(&mut fonts);
     g.cursor = gal_ui::cursor::CursorMgr::new(&g.conf); // 自定义鼠标（未配置=系统）
     g.cursor.set_default();
     let mut exts = crate::exts::registry::build(&g.conf.extensions); // yaml 内置拓展
@@ -125,6 +133,10 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
         g.tick(dt);
         g.interp.tick(dt);
         g.interp.apply_pending(&mut fonts, &g.style);
+        if g.style_dirty {
+            g.interp.relayout(&mut fonts, &g.style);
+            g.style_dirty = false;
+        }
         g.sys.audio.pump();
 
         // 拓展驱动（倒计时选项等）
@@ -138,6 +150,20 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
             if *v > 0 {
                 g.interp.tw.interval_ms = *v as f32;
             }
+        }
+
+        // 玩家设置每帧对账：脚本也能写 sf.*，以最终值为准（值变才重算，开销可忽略）
+        poll_player_settings(&mut g, &mut fonts);
+
+        // 自动存档（save.auto_save_ms；仅台词等待态累计）
+        if g.conf.save.auto_save_ms > 0 && g.started && g.can_save() {
+            g.autosave_acc += dt;
+            if g.autosave_acc >= g.conf.save.auto_save_ms as f32 {
+                g.autosave_acc = 0.0;
+                crate::input::saves::autosave(&mut g, &mut renderer, &mut canvas, &mut thumbs);
+            }
+        } else {
+            g.autosave_acc = 0.0;
         }
 
         // 缓存层收货 + 预读喂料 + 场景切换回收
@@ -216,7 +242,11 @@ fn maintain_input_ui(g: &mut Game) {
     match (&g.interp.state, g.input_ui.is_some()) {
         (RunState::WaitInput(spec), false) => {
             let presets = gal_ui::inputbox::presets_for(&g.conf, &spec.var);
-            g.input_ui = Some(gal_ui::inputbox::InputUi::new((**spec).clone(), presets));
+            g.input_ui = Some(gal_ui::inputbox::InputUi::new(
+                (**spec).clone(),
+                presets,
+                g.conf.ui.input.max_len,
+            ));
             unsafe { SDL_StartTextInput() };
         }
         (RunState::WaitInput(_), true) => {}
@@ -228,21 +258,57 @@ fn maintain_input_ui(g: &mut Game) {
     }
 }
 
+/// 玩家设置对账：字体族索引变化 → 切族并清缓存；字号/行距/皮肤/转场变化 → 重算
+fn poll_player_settings(g: &mut Game, fonts: &mut FontBook) {
+    let int = |k: &str| g.interp.vars.sf.get(k).map(|v| v.as_i64());
+    let want_font = int("fontFamily").unwrap_or(0).max(0) as usize;
+    if want_font != fonts.family_index() && want_font < fonts.family_names().len() {
+        fonts.set_family(want_font);
+        g.style_dirty = true;
+    }
+    g.interp.trans_enabled = int("transOn").map(|v| v != 0).unwrap_or(true);
+    // 字号/行距/等待标记/皮肤：与当前样式不同才重算（重算会触发台词重排）
+    let want = crate::systems::compose_style(&g.conf, None, &g.interp.vars);
+    let changed = want.font_size != g.style.font_size
+        || want.line_spacing != g.style.line_spacing
+        || want.wait_marker != g.style.wait_marker
+        || want.fill != g.style.fill
+        || want.border != g.style.border
+        || want.text_color != g.style.text_color;
+    if changed {
+        if gal_script::interp::dbg() {
+            eprintln!(
+                "[dbg settings] 运行期重算：字号 {}→{} 行距 {}→{} 标记 {}→{}",
+                g.style.font_size,
+                want.font_size,
+                g.style.line_spacing,
+                want.line_spacing,
+                g.style.wait_marker,
+                want.wait_marker
+            );
+        }
+        g.style = want;
+        let idx = int("skinIndex").unwrap_or(0).max(0) as usize;
+        g.skin = g.conf.ui.skin.at(idx);
+        g.style_dirty = true;
+    }
+}
+
 /// 可自由缩放窗口；首选加速+vsync，无 GPU（xvfb 验收）回退软件渲染
 fn make_canvas(
     video: &sdl2::VideoSubsystem,
-    title: &str,
+    conf: &config::Config,
 ) -> Result<sdl2::render::Canvas<sdl2::video::Window>, String> {
+    let (w, h) = (conf.display.width.max(320), conf.display.height.max(240));
+    let resizable = conf.display.resizable;
+    let title = conf.meta.title.as_str();
     let build = || {
-        video
-            .window(title, config::LOGICAL_W, config::LOGICAL_H)
-            .position_centered()
-            .resizable()
-            .build()
-            .map_err(|e| e.to_string())
+        video.window(title, w, h).position_centered().resizable().build().map_err(|e| e.to_string())
     };
-    match build()?.into_canvas().accelerated().present_vsync().build() {
-        Ok(c) => Ok(c),
-        Err(_) => build()?.into_canvas().software().build().map_err(|e| e.to_string()),
-    }
+    let mut canvas = match build()?.into_canvas().accelerated().present_vsync().build() {
+        Ok(c) => c,
+        Err(_) => build()?.into_canvas().software().build().map_err(|e| e.to_string())?,
+    };
+    canvas.window_mut().set_resizable(resizable);
+    Ok(canvas)
 }

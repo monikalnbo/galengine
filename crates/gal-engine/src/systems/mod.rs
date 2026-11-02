@@ -40,15 +40,58 @@ pub struct Game {
     pub hide_ui: bool,
     pub conf: Config,
     pub style: DialogStyle,
+    /// 玩家当前皮肤（sf.skinIndex → ui.skin 列表）
+    pub skin: gal_config::SkinCfg,
     pub now_ms: f32,
+    /// 字色/字号/行距变化后需重建排版（下一帧生效）
+    pub style_dirty: bool,
+    /// 自动存档计时（save.auto_save_ms；0=关闭）
+    pub autosave_acc: f32,
+    /// 可用字体族名（FontBook 实况；设置面板枚举用）
+    pub font_families: Vec<String>,
+    /// 设置面板「按键重绑」进行中：待绑定的动作名
+    pub rebind: Option<String>,
+    /// 最近一次存/读的槽位（自动存档写回这里）
+    pub last_slot: usize,
+}
+
+/// 合成生效样式：作者 ui.dialog/text + 玩家 sf.*（字号/行距/皮肤）
+pub fn compose_style(
+    conf: &Config,
+    skin_index: Option<usize>,
+    vars: &gal_script::vars::Vars,
+) -> DialogStyle {
+    let get = |k: &str| vars.sf.get(k).map(|v| v.as_i64()).unwrap_or(0);
+    let psize = get("textSize").clamp(0, 255) as u16;
+    let pspace = get("lineSpacing").clamp(0, 1_000) as i32;
+    let style = DialogStyle::from_cfg_text(
+        &conf.ui.dialog,
+        &conf.text,
+        conf.game.name_colors.clone(),
+        psize,
+        pspace,
+    );
+    let idx = skin_index.unwrap_or_else(|| get("skinIndex").max(0) as usize);
+    let skin = conf.ui.skin.at(idx);
+    let mut style = style.with_skin(&skin);
+    // 玩家开关页满等待标记（0/1；未设置 = 跟随作者 text.wait_marker）
+    if let Some(v) = vars.sf.get("waitMarker") {
+        style.wait_marker = v.as_i64() == 1;
+    }
+    // 玩家描边宽度（0 = 跟随作者 text.outline）
+    if let Some(v) = vars.sf.get("outline") {
+        let w = v.as_i64().clamp(0, gal_config::FX_MAX as i64) as u8;
+        style.outline = w;
+    }
+    style
 }
 
 impl Game {
     pub fn new(conf: Config, interp: Interp) -> Self {
         let meta_path = format!("{}/meta.json", conf.save.dir);
         let meta = MetaState::load(&meta_path);
-        let audio = Audio::new(conf.audio.bgm_volume, conf.audio.se_volume);
-        let style = DialogStyle::from_cfg(&conf.ui.dialog, conf.game.name_colors.clone());
+        let audio = Audio::new(&conf);
+        let style = compose_style(&conf, None, &gal_script::vars::Vars::default());
         let sys = Systems {
             audio,
             meta,
@@ -77,9 +120,96 @@ impl Game {
             auto_acc: 0.0,
             ctrl_hold: false,
             hide_ui: false,
-            style,
+            style: style.clone(),
+            skin: conf.ui.skin.at(0),
+            style_dirty: false,
+            autosave_acc: 0.0,
+            font_families: Vec::new(),
+            rebind: None,
+            last_slot: 1,
             conf,
             now_ms: 0.0,
+        }
+    }
+
+    /// 生效键位表：作者默认（game.yaml keymap）→ 玩家 sf.keymap.<action> 覆盖
+    pub fn keymap(&self) -> std::collections::HashMap<String, Vec<String>> {
+        let mut m = self.conf.keymap.effective();
+        for (action, _) in gal_config::keymap::ACTIONS {
+            let Some(v) = self.interp.vars.sf.get(&format!("keymap.{action}")) else {
+                continue;
+            };
+            let keys: Vec<String> = v
+                .as_str()
+                .split(',')
+                .map(|x| x.trim().to_string())
+                .filter(|x| !x.is_empty())
+                .collect();
+            if !keys.is_empty() {
+                m.insert((*action).to_string(), keys);
+            }
+        }
+        m
+    }
+
+    /// 重算样式（玩家 sf.textSize/lineSpacing/waitMarker/skinIndex 生效）
+    pub fn refresh_style(&mut self) {
+        self.style = compose_style(&self.conf, None, &self.interp.vars);
+        let idx =
+            self.interp.vars.sf.get("skinIndex").map(|v| v.as_i64().max(0) as usize).unwrap_or(0);
+        self.skin = self.conf.ui.skin.at(idx);
+        self.style_dirty = true;
+    }
+
+    /// 应用持久化的玩家设置（启动时一次：音频三通道/转场开关/字体族/样式）
+    pub fn apply_saved_settings(&mut self, fonts: &mut gal_text::font::FontBook) {
+        let int = |k: &str| self.interp.vars.sf.get(k).map(|v| v.as_i64());
+        if let Some(v) = int("volBgm") {
+            self.sys.audio.bgm_vol = v.clamp(0, 100) as i32;
+        }
+        if let Some(v) = int("volSe") {
+            self.sys.audio.se_vol = v.clamp(0, 100) as i32;
+        }
+        if let Some(v) = int("volVoice") {
+            self.sys.audio.voice_vol = v.clamp(0, 100) as i32;
+        }
+        self.sys.audio.apply_volumes();
+        if let Some(v) = int("transOn") {
+            self.interp.trans_enabled = v != 0;
+        }
+        if let Some(v) = int("textSpeed") {
+            if v > 0 {
+                self.interp.tw.interval_ms = v as f32;
+            }
+        }
+        self.apply_font_family(fonts);
+        self.refresh_style();
+        if gal_script::interp::dbg() {
+            eprintln!(
+                "[dbg settings] 启动套用：字号 {} 行距 {} 描边 {} 标记 {} 填充 {:?} 字色 {:?} 字体 {} 转场 {} 音量 {}/{}/{}",
+                self.style.font_size,
+                self.style.line_spacing,
+                self.style.outline,
+                self.style.wait_marker,
+                self.style.fill,
+                self.style.text_color,
+                fonts.family_index(),
+                self.interp.trans_enabled,
+                self.sys.audio.bgm_vol,
+                self.sys.audio.se_vol,
+                self.sys.audio.voice_vol,
+            );
+        }
+    }
+
+    /// 切换字体族（sf.fontFamily）；越界/不可用回落默认
+    pub fn apply_font_family(&mut self, fonts: &mut gal_text::font::FontBook) {
+        self.font_families = fonts.family_names().to_vec();
+        let want =
+            self.interp.vars.sf.get("fontFamily").map(|v| v.as_i64().max(0) as usize).unwrap_or(0);
+        let want = want.min(self.font_families.len().saturating_sub(1));
+        if fonts.family_index() != want {
+            fonts.set_family(want);
         }
     }
 
@@ -97,6 +227,7 @@ impl Game {
     /// 帧计时：抖动/越界淡入淡出/关机倒计时/提示/仪式渐白
     pub fn tick(&mut self, dt_ms: f32) {
         self.now_ms += dt_ms;
+        self.sys.audio.update_duck();
         if let Some(s) = &mut self.sys.shake {
             s.left_ms -= dt_ms;
             if s.left_ms <= 0.0 {

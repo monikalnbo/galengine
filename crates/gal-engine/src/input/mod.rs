@@ -6,8 +6,8 @@ mod auto;
 mod keyboard;
 mod keys;
 mod mouse;
-mod saves;
-mod settings_io;
+pub(crate) mod saves;
+pub(crate) mod settings_io;
 
 #[cfg(test)]
 mod saves_test;
@@ -55,7 +55,7 @@ pub fn dispatch(
 
         Event::MouseMotion { x, y, .. } if !g.overlay.active() && g.choice_len() > 0 => {
             let (lx, ly) = Renderer::to_logical(canvas, x, y);
-            if let Some(i) = gal_ui::choice::hit_test(g.choice_len(), lx, ly) {
+            if let Some(i) = gal_ui::choice::hit_test(g.choice_len(), &g.conf.ui.choice, lx, ly) {
                 g.choice_sel = i;
             }
             Ok(true)

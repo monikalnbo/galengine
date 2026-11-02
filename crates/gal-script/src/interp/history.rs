@@ -28,10 +28,23 @@ impl Interp {
                     text.chars().take(12).collect::<String>()
                 );
             }
+            self.cur_text = text.clone();
             if let Ok(font) = fonts.font(style.font_size) {
                 let max_w = (style.box_rect[2] - 96) as u32;
                 self.tw.set_text(&text, font, max_w, style.lines_per_page);
             }
+        }
+    }
+
+    /// 样式变更（字号/行距/字体族）：按当前台词重排，打字机从头显示
+    pub fn relayout(&mut self, fonts: &mut FontBook, style: &DialogStyle) {
+        if self.cur_text.is_empty() {
+            return;
+        }
+        if let Ok(font) = fonts.font(style.font_size) {
+            let max_w = (style.box_rect[2] - 96) as u32;
+            let text = self.cur_text.clone();
+            self.tw.set_text(&text, font, max_w, style.lines_per_page);
         }
     }
 

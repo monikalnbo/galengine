@@ -24,6 +24,8 @@ impl Game {
             SysEvent::BgmStop => self.sys.audio.stop_bgm(),
             SysEvent::BgmFadeOut { ms } => self.sys.audio.fade_out_bgm(ms),
             SysEvent::Se(n) => self.sys.audio.play_se(&n),
+            SysEvent::Voice(n) => self.sys.audio.play_voice(&n),
+            SysEvent::VoiceStop => self.sys.audio.stop_voice(),
             SysEvent::MetaFake { date, time, image } => {
                 self.sys.meta.fake_saves.push(gal_save::meta::FakeSave { date, time, image });
                 self.sys.meta.save(&self.sys.meta_path);

@@ -57,8 +57,8 @@ pub fn draw(
         canvas.fill_rect(Rect::new(LOGICAL_W as i32 / 2 - 44 + i as i32 * 44, 320, 24, 8))?;
     }
 
-    button(canvas, fonts, del_rect(), "「删除」", true)?;
-    button(canvas, fonts, back_rect(), "「回头」", false)?;
+    button(canvas, fonts, del_rect(), "「删除」", 30, true, &conf.ui.button)?;
+    button(canvas, fonts, back_rect(), "「回头」", 30, false, &conf.ui.button)?;
 
     // 渐白光页（第三击后 fade 0→1）
     if fade > 0.0 {

@@ -27,7 +27,7 @@ gal-engine = { path = "crates/gal-engine" }
 
 # 全家族统一在 release 收尾：LTO+strip（游戏 bin 继承）
 [profile.release]
-opt-level = 3
+opt-level = "s"
 lto = true
 strip = true
 

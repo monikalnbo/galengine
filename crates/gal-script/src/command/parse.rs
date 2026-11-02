@@ -31,6 +31,11 @@ impl Command {
                 [s] => Ok(Command::Se(s.to_string())),
                 _ => err("se 用法：se 名称"),
             },
+            "voice" => match tokens.as_slice() {
+                [s] if s == &"stop" => Ok(Command::VoiceStop),
+                [s] => Ok(Command::Voice(s.to_string())),
+                _ => err("voice 用法：voice 名称 / voice stop"),
+            },
             "char" => match tokens.as_slice() {
                 [l, s] => Ok(Command::Char {
                     layer: l

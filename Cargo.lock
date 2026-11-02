@@ -159,6 +159,7 @@ dependencies = [
 name = "gal-text"
 version = "0.2.3"
 dependencies = [
+ "gal-config",
  "sdl2",
 ]
 

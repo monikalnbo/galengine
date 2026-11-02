@@ -36,7 +36,13 @@ pub fn click(
                 return Ok(true);
             }
             Overlay::Menu { .. } => {
-                if let Some(i) = menu::hit_test(esc_items().len(), g.conf.ui.menu.top_y, lx, ly) {
+                if let Some(i) = menu::hit_test(
+                    esc_items(&g.conf).len(),
+                    &g.conf.ui.menu,
+                    g.conf.ui.menu.top_y,
+                    lx,
+                    ly,
+                ) {
                     g.overlay = Overlay::Menu { sel: i };
                     if !activate::menu_activate(g, i, canvas, renderer, thumbs)? {
                         return Ok(false);
@@ -62,9 +68,13 @@ pub fn click(
                 }
             }
             Overlay::Title { .. } => {
-                if let Some(i) =
-                    menu::hit_test(title_items().len(), g.conf.ui.title.menu_top_y, lx, ly)
-                {
+                if let Some(i) = menu::hit_test(
+                    title_items(&g.conf).len(),
+                    &g.conf.ui.menu,
+                    g.conf.ui.title.menu_top_y,
+                    lx,
+                    ly,
+                ) {
                     g.overlay = Overlay::Title { sel: i };
                     if !activate::title_activate(g, i, thumbs)? {
                         return Ok(false);
@@ -88,7 +98,7 @@ pub fn click(
     }
     // 底部功能条：自动/快进/存档/读档/设置（输入界面不显示，避免与确认键拥挤）
     if g.started && !matches!(g.interp.state, gal_script::interp::RunState::WaitInput(_)) {
-        if let Some(i) = gal_ui::bottombar::hit(lx as i32, ly as i32) {
+        if let Some(i) = gal_ui::bottombar::hit(&g.conf.ui.bottombar, lx as i32, ly as i32) {
             return activate::bottombar_activate(g, i, thumbs);
         }
     }
@@ -103,7 +113,7 @@ pub fn click(
                 }
             }
             if !handled {
-                if let Some(i) = choice::hit_test(g.choice_len(), lx, ly) {
+                if let Some(i) = choice::hit_test(g.choice_len(), &g.conf.ui.choice, lx, ly) {
                     g.choice_sel = 0;
                     g.interp.choose(i)?;
                 }
@@ -111,7 +121,11 @@ pub fn click(
         }
         gal_script::interp::RunState::WaitInput(_) => {
             use gal_ui::inputbox::{self, Hit};
-            match g.input_ui.as_ref().and_then(|ui| inputbox::hit_test(ui, lx, ly)) {
+            match g
+                .input_ui
+                .as_ref()
+                .and_then(|ui| inputbox::hit_test(ui, &g.conf.ui.input, lx, ly))
+            {
                 Some(Hit::Preset(i)) => {
                     if let Some(ui) = g.input_ui.as_mut() {
                         if let Some(p) = ui.presets.get(i) {

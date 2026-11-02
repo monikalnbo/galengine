@@ -14,6 +14,8 @@ pub enum SysEvent {
         ms: u32,
     },
     Se(String),
+    Voice(String),
+    VoiceStop,
     MetaFake {
         date: String,
         time: String,

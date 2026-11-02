@@ -44,6 +44,7 @@ pub fn frame(
     });
 
     let style = &g.style;
+    let skin = g.skin.clone();
     let name = g.interp.cur_name.clone();
     let sel = g.choice_sel.min(g.choice_len().saturating_sub(1));
     let now = g.now_ms;
@@ -55,25 +56,33 @@ pub fn frame(
             if !g.hide_ui {
                 match &g.interp.state {
                     RunState::WaitChoice { prompt, items } => {
-                        choice::draw(tc, fonts, prompt, items, sel)?;
+                        choice::draw(
+                            tc,
+                            fonts,
+                            &g.conf.ui.choice,
+                            &g.conf.ui.button,
+                            prompt,
+                            items,
+                            sel,
+                        )?;
                         for e in &g.exts {
                             e.draw(tc, fonts)?; // 拓展叠加（倒计时条等）
                         }
-                        bottombar::draw(tc, fonts, auto, g.ctrl_hold)?;
+                        bottombar::draw(tc, fonts, &g.conf.ui.bottombar, &skin, auto, g.ctrl_hold)?;
                     }
                     RunState::WaitInput(_) => {
                         if let Some(ui) = &g.input_ui {
-                            inputbox::draw(tc, fonts, ui)?;
+                            inputbox::draw(tc, fonts, ui, &g.conf)?;
                         }
                     }
                     _ => {
                         dialog::draw(tc, fonts, style, name.as_deref(), &g.interp.tw, now)?;
-                        bottombar::draw(tc, fonts, auto, g.ctrl_hold)?;
+                        bottombar::draw(tc, fonts, &g.conf.ui.bottombar, &skin, auto, g.ctrl_hold)?;
                     }
                 }
             }
         }
-        // 覆盖层（标题/菜单/存档/鉴赏/音量/仪式）
+        // 覆盖层（标题/菜单/存档/鉴赏/设置/仪式）
         draw_overlay(tc, g, fonts, thumbs, bank)?;
         Ok(())
     })?;
@@ -125,7 +134,16 @@ fn draw_overlay(
     match &g.overlay {
         Overlay::None => {}
         Overlay::Menu { sel } => {
-            menu::draw(tc, fonts, &esc_items(), *sel, g.conf.ui.menu.top_y, true)?;
+            menu::draw(
+                tc,
+                fonts,
+                &g.conf.ui.menu,
+                &g.conf.ui.button,
+                &esc_items(&g.conf),
+                *sel,
+                g.conf.ui.menu.top_y,
+                true,
+            )?;
         }
         Overlay::Title { sel, .. } => {
             title::draw(
@@ -144,6 +162,7 @@ fn draw_overlay(
                 tc,
                 fonts,
                 thumbs,
+                &g.conf,
                 &g.save_entries,
                 &g.sys.meta.fake_saves,
                 &g.sys.meta.corrupt,
@@ -168,15 +187,12 @@ fn draw_overlay(
             }
         }
         Overlay::Settings { sel } => {
-            let items = gal_ui::settings::rows(&g.conf);
+            let env = crate::input::settings_io::env(g);
+            let items = gal_ui::settings::rows(&g.conf, &env);
             let fs = tc.window().fullscreen_state() != sdl2::video::FullscreenType::Off;
-            let ctx = gal_ui::settings::SettingsCtx::from_vars(
-                &g.interp.vars,
-                g.sys.audio.bgm_vol,
-                g.sys.audio.se_vol,
-                fs,
-            );
-            gal_ui::settings::draw(tc, fonts, &items, &ctx, *sel)?;
+            let ctx =
+                gal_ui::settings::SettingsCtx::from_vars(&g.interp.vars, &g.conf, &g.keymap(), fs);
+            gal_ui::settings::draw(tc, fonts, &items, &ctx, *sel, g.rebind.is_some())?;
         }
         Overlay::Ritual { step, fade, .. } => {
             ritual::draw(tc, fonts, &g.conf, *step, *fade)?;

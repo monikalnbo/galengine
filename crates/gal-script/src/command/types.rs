@@ -12,6 +12,9 @@ pub enum Command {
         ms: u32,
     },
     Se(String),
+    /// 语音（`voice 名称`；voice 目录下按 `<角色>/<文件>` 或 `<文件>` 查找）
+    Voice(String),
+    VoiceStop,
     Char {
         layer: u8,
         storage: String,

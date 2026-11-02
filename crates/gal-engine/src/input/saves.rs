@@ -68,10 +68,27 @@ pub fn do_save(
         thumb: gal_save::slots::thumb_png(&rgba, config::LOGICAL_W, config::LOGICAL_H),
     };
     gal_save::slots::save(&g.sys.save_dir, &entry)?;
+    g.last_slot = slot;
     g.refresh_saves();
     thumbs.build(&g.save_entries, &g.sys.meta.fake_saves);
     g.msg(format!("已保存：槽 {slot}"));
     Ok(())
+}
+
+/// 自动存档（save.auto_save_ms）：写进最近一次存/读的槽位（无则槽 1）
+pub fn autosave(
+    g: &mut Game,
+    renderer: &mut Renderer,
+    canvas: &mut Canvas<Window>,
+    thumbs: &mut ThumbCache,
+) {
+    if !g.can_save() {
+        return;
+    }
+    let slot = g.last_slot.clamp(1, g.sys.slots.max(1));
+    if do_save(g, renderer, canvas, thumbs, slot).is_ok() {
+        g.msg(format!("自动存档：槽 {slot}"));
+    }
 }
 
 /// 读档执行（指纹校验 + 演出层快照恢复）
@@ -88,6 +105,7 @@ pub fn do_load(g: &mut Game, slot: usize) {
                         None => g.sys.audio.stop_bgm(),
                     }
                     g.interp.cur_bgm = e.bgm.clone();
+                    g.last_slot = slot;
                     g.overlay = Overlay::None;
                     g.auto = false;
                     g.started = true; // 从标题快读也直接开局

@@ -8,7 +8,7 @@ use sdl2::video::Window;
 use super::cache::ThumbCache;
 use super::{cell_rect, close_rect};
 use crate::widgets::button;
-use gal_config::LOGICAL_W;
+use gal_config::{Config, LOGICAL_W};
 use gal_save::meta::FakeSave;
 use gal_save::slots::SaveEntry;
 use gal_text::font::FontBook;
@@ -22,6 +22,7 @@ pub fn draw(
     canvas: &mut Canvas<Window>,
     fonts: &mut FontBook,
     thumbs: &ThumbCache,
+    conf: &Config,
     entries: &[(usize, Option<SaveEntry>)],
     fake: &[FakeSave],
     corrupt: &[usize],
@@ -109,7 +110,7 @@ pub fn draw(
         )?;
     }
 
-    button(canvas, fonts, close_rect(), "关闭 Esc", false)?;
+    button(canvas, fonts, close_rect(), "关闭 Esc", 30, false, &conf.ui.button)?;
     Ok(())
 }
 

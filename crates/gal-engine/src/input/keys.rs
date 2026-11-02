@@ -49,8 +49,8 @@ pub fn overlay_move(g: &mut Game, k: Keycode, canvas: &mut Canvas<Window>) {
         return;
     }
     let n = match &g.overlay {
-        Overlay::Menu { .. } => esc_items().len(),
-        Overlay::Title { .. } => title_items().len(),
+        Overlay::Menu { .. } => esc_items(&g.conf).len(),
+        Overlay::Title { .. } => title_items(&g.conf).len(),
         Overlay::Save { .. } => g.save_entries.len() + g.sys.meta.fake_saves.len(),
         _ => return,
     };

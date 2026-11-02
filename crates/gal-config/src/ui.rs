@@ -3,6 +3,8 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
+use crate::SkinListCfg;
+
 // ============================================================
 // UI 总配置
 // ============================================================
@@ -18,6 +20,8 @@ pub struct UiCfg {
     pub input: InputCfg,
     pub cursor: CursorCfg,
     pub button: ButtonCfg,
+    /// 可选 UI 皮肤（作者给多套，玩家在设置里切换）
+    pub skin: SkinListCfg,
     /// 图层叠加定义（标题画面/自定义界面用）
     pub layers: HashMap<String, Vec<LayerDef>>,
 }
@@ -29,8 +33,6 @@ pub struct UiCfg {
 #[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct DialogCfg {
-    /// 自定义对话框底图（null=引擎默认半透明黑）
-    pub box_image: Option<String>,
     pub box_rect: [i32; 4],
     pub text_x: i32,
     pub text_y: i32,
@@ -38,13 +40,10 @@ pub struct DialogCfg {
     pub name_font_size: u16,
     pub lines_per_page: usize,
     pub typewriter_ms: f32,
-    /// 对话框透明度（0=全透明 255=不透明）
-    pub opacity: u8,
 }
 impl Default for DialogCfg {
     fn default() -> Self {
         Self {
-            box_image: None,
             box_rect: [56, 514, 1168, 172],
             text_x: 104,
             text_y: 542,
@@ -52,7 +51,6 @@ impl Default for DialogCfg {
             name_font_size: 30,
             lines_per_page: 3,
             typewriter_ms: 30.0,
-            opacity: 170,
         }
     }
 }
@@ -64,8 +62,6 @@ impl Default for DialogCfg {
 #[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct ChoiceCfg {
-    pub item_image: Option<String>,
-    pub item_hover_image: Option<String>,
     pub item_width: u32,
     pub item_height: u32,
     pub gap: i32,
@@ -74,15 +70,7 @@ pub struct ChoiceCfg {
 }
 impl Default for ChoiceCfg {
     fn default() -> Self {
-        Self {
-            item_image: None,
-            item_hover_image: None,
-            item_width: 760,
-            item_height: 66,
-            gap: 18,
-            top_y: 236,
-            font_size: 28,
-        }
+        Self { item_width: 760, item_height: 66, gap: 18, top_y: 236, font_size: 28 }
     }
 }
 
@@ -93,7 +81,7 @@ impl Default for ChoiceCfg {
 #[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct BottombarCfg {
-    pub enabled: bool,
+    /// 按钮标签；空 = 不显示底栏（默认与 v0.2.x 一致的五键）
     pub buttons: Vec<String>,
     pub button_width: u32,
     pub button_height: u32,
@@ -102,11 +90,15 @@ pub struct BottombarCfg {
     pub right_align: i32,
     pub font_size: u16,
 }
+/// 默认底栏五键（顺序即 activate::bottombar_activate 的分派顺序）
+pub fn default_bar_buttons() -> Vec<String> {
+    ["自动", "快进", "存档", "读档", "设置"].iter().map(|s| s.to_string()).collect()
+}
+
 impl Default for BottombarCfg {
     fn default() -> Self {
         Self {
-            enabled: false,
-            buttons: Vec::new(),
+            buttons: default_bar_buttons(),
             button_width: 92,
             button_height: 28,
             gap: 10,
@@ -130,7 +122,6 @@ pub struct TitleCfg {
     pub hint_text: String,
     pub hint_y: i32,
     pub menu_top_y: i32,
-    pub menu_gap: i32,
 }
 impl Default for TitleCfg {
     fn default() -> Self {
@@ -141,7 +132,6 @@ impl Default for TitleCfg {
             hint_text: "— select —".into(),
             hint_y: 238,
             menu_top_y: 270,
-            menu_gap: 76,
         }
     }
 }
@@ -153,7 +143,6 @@ impl Default for TitleCfg {
 #[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct MenuCfg {
-    pub item_image: Option<String>,
     pub item_width: u32,
     pub item_height: u32,
     pub gap: i32,
@@ -162,14 +151,7 @@ pub struct MenuCfg {
 }
 impl Default for MenuCfg {
     fn default() -> Self {
-        Self {
-            item_image: None,
-            item_width: 380,
-            item_height: 62,
-            gap: 14,
-            top_y: 100,
-            font_size: 30,
-        }
+        Self { item_width: 380, item_height: 62, gap: 14, top_y: 100, font_size: 30 }
     }
 }
 
@@ -186,6 +168,8 @@ pub struct InputCfg {
     pub confirm_y: i32,
     pub hint_y: i32,
     pub veil_alpha: u8,
+    /// 名字最大字符数（超出不接收）
+    pub max_len: usize,
 }
 impl Default for InputCfg {
     fn default() -> Self {
@@ -196,6 +180,7 @@ impl Default for InputCfg {
             confirm_y: 480,
             hint_y: 575,
             veil_alpha: 160,
+            max_len: 12,
         }
     }
 }
@@ -222,8 +207,6 @@ pub struct CursorCfg {
 #[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct ButtonCfg {
-    pub normal_image: Option<String>,
-    pub accent_image: Option<String>,
     pub fill_normal: [u8; 4],
     pub fill_accent: [u8; 4],
     pub border_normal: [u8; 4],
@@ -231,13 +214,10 @@ pub struct ButtonCfg {
     pub text_normal: [u8; 3],
     pub text_accent: [u8; 3],
     pub border_width: u8,
-    pub radius: Option<u8>,
 }
 impl Default for ButtonCfg {
     fn default() -> Self {
         Self {
-            normal_image: None,
-            accent_image: None,
             fill_normal: [28, 34, 58, 215],
             fill_accent: [52, 74, 128, 235],
             border_normal: [130, 150, 200, 150],
@@ -245,7 +225,6 @@ impl Default for ButtonCfg {
             text_normal: [210, 216, 232],
             text_accent: [255, 255, 255],
             border_width: 1,
-            radius: None,
         }
     }
 }

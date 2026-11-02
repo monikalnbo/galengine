@@ -7,7 +7,7 @@ use sdl2::video::Window;
 
 pub use crate::widgets::button;
 use crate::widgets::{self, centered_h, centered_in};
-use gal_config::{Config, LOGICAL_W};
+use gal_config::{Config, InputCfg, LOGICAL_W};
 use gal_script::interp::InputSpec;
 use gal_text::font::FontBook;
 
@@ -19,6 +19,8 @@ pub struct InputUi {
     pub buf: String,
     pub presets: Vec<String>,
     pub blink: f32,
+    /// 作者 ui.input.max_len（默认 12 字）
+    pub max_len: usize,
 }
 
 /// 预设名查 config.game.input_presets：按变量基名（heroName→hero）；
@@ -34,12 +36,12 @@ pub fn presets_for(conf: &Config, var: &str) -> Vec<String> {
 }
 
 impl InputUi {
-    pub fn new(spec: InputSpec, presets: Vec<String>) -> Self {
-        Self { buf: spec.default.clone(), spec, presets, blink: 0.0 }
+    pub fn new(spec: InputSpec, presets: Vec<String>, max_len: usize) -> Self {
+        Self { buf: spec.default.clone(), spec, presets, blink: 0.0, max_len: max_len.max(1) }
     }
 
     pub fn push_char(&mut self, c: &str) {
-        if self.buf.chars().count() < 12 {
+        if self.buf.chars().count() < self.max_len {
             self.buf.push_str(c);
         }
     }
@@ -64,45 +66,51 @@ pub enum Hit {
     Confirm,
 }
 
-fn box_rect(w: &InputUi) -> Rect {
+fn box_rect(w: &InputUi, cfg: &InputCfg) -> Rect {
     let bw = w.spec.width.max(360);
-    Rect::new((LOGICAL_W as i32 - bw as i32) / 2, 270, bw, 70)
+    Rect::new((LOGICAL_W as i32 - bw as i32) / 2, cfg.box_y, bw, 70)
 }
 
-fn preset_rect(i: usize) -> Rect {
+fn preset_rect(i: usize, cfg: &InputCfg) -> Rect {
     let gap = 24;
     let total = 3 * 150 + 2 * gap;
     let x0 = (LOGICAL_W as i32 - total) / 2;
-    Rect::new(x0 + i as i32 * (150 + gap), 400, 150, 54)
+    Rect::new(x0 + i as i32 * (150 + gap), cfg.preset_y, 150, 54)
 }
 
-fn confirm_rect() -> Rect {
-    Rect::new((LOGICAL_W - 260) as i32 / 2, 480, 260, 60)
+fn confirm_rect(cfg: &InputCfg) -> Rect {
+    Rect::new((LOGICAL_W - 260) as i32 / 2, cfg.confirm_y, 260, 60)
 }
 
-pub fn hit_test(w: &InputUi, x: f32, y: f32) -> Option<Hit> {
+pub fn hit_test(w: &InputUi, cfg: &InputCfg, x: f32, y: f32) -> Option<Hit> {
     for i in 0..w.presets.len() {
-        if preset_rect(i).contains_point((x as i32, y as i32)) {
+        if preset_rect(i, cfg).contains_point((x as i32, y as i32)) {
             return Some(Hit::Preset(i));
         }
     }
-    confirm_rect().contains_point((x as i32, y as i32)).then_some(Hit::Confirm)
+    confirm_rect(cfg).contains_point((x as i32, y as i32)).then_some(Hit::Confirm)
 }
 
-pub fn draw(canvas: &mut Canvas<Window>, fonts: &mut FontBook, w: &InputUi) -> Result<(), String> {
+pub fn draw(
+    canvas: &mut Canvas<Window>,
+    fonts: &mut FontBook,
+    w: &InputUi,
+    conf: &Config,
+) -> Result<(), String> {
+    let cfg = &conf.ui.input;
     canvas.set_blend_mode(BlendMode::Blend);
 
     // 压暗纱：隔开游戏画面，亮背景下元素不再看不清
-    canvas.set_draw_color(Color::RGBA(0, 0, 0, 160));
+    canvas.set_draw_color(Color::RGBA(0, 0, 0, cfg.veil_alpha));
     canvas.fill_rect(Rect::new(0, 0, LOGICAL_W, 720))?;
 
     // 提示语
     let tex = fonts.render_text(FONT, Color::RGB(235, 235, 240), &w.spec.prompt)?;
     let q = tex.query();
-    canvas.copy(tex, None, Some(centered_h(q.width, q.height, 180)))?;
+    canvas.copy(tex, None, Some(centered_h(q.width, q.height, cfg.prompt_y)))?;
 
     // 输入框（光标闪烁）
-    let br = box_rect(w);
+    let br = box_rect(w, cfg);
     canvas.set_draw_color(Color::RGBA(10, 12, 26, 225));
     canvas.fill_rect(br)?;
     canvas.set_draw_color(Color::RGBA(150, 200, 255, 170));
@@ -127,11 +135,11 @@ pub fn draw(canvas: &mut Canvas<Window>, fonts: &mut FontBook, w: &InputUi) -> R
 
     // 预设按钮
     for (i, name) in w.presets.iter().enumerate() {
-        widgets::button(canvas, fonts, preset_rect(i), name, false)?;
+        widgets::button(canvas, fonts, preset_rect(i, cfg), name, FONT, false, &conf.ui.button)?;
     }
 
     // 确认按钮
-    widgets::button(canvas, fonts, confirm_rect(), "—— 好 ——", true)?;
+    widgets::button(canvas, fonts, confirm_rect(cfg), "—— 好 ——", FONT, true, &conf.ui.button)?;
 
     // 小字说明
     let tex = fonts.render_text(
@@ -140,21 +148,29 @@ pub fn draw(canvas: &mut Canvas<Window>, fonts: &mut FontBook, w: &InputUi) -> R
         "直接键入（支持输入法）· 或点选预设名",
     )?;
     let q = tex.query();
-    canvas.copy(tex, None, Some(centered_h(q.width, q.height, 575)))
+    canvas.copy(tex, None, Some(centered_h(q.width, q.height, cfg.hint_y)))
 }
 
 #[cfg(test)]
 mod tests {
+    fn read_cfg() -> gal_config::InputCfg {
+        gal_config::InputCfg::default()
+    }
+
     use super::*;
 
     #[test]
     fn preset_labels_are_centered_in_their_own_buttons() {
+        let cfg = read_cfg();
         for i in 0..3 {
-            let button = preset_rect(i);
+            let button = preset_rect(i, &cfg);
             let text = centered_in(button, 60, 30);
             assert_eq!(text.center(), button.center());
             assert!(button.contains_rect(text));
         }
-        assert_ne!(centered_in(preset_rect(0), 60, 30), centered_in(preset_rect(1), 60, 30));
+        assert_ne!(
+            centered_in(preset_rect(0, &cfg), 60, 30),
+            centered_in(preset_rect(1, &cfg), 60, 30)
+        );
     }
 }

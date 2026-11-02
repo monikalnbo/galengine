@@ -7,21 +7,29 @@ pub mod display;
 pub mod ext;
 pub mod fonts;
 pub mod game;
+pub mod keymap;
 pub mod paths;
 pub mod save;
+pub mod skin;
 pub mod sprites;
 pub mod style;
+pub mod text;
 pub mod ui;
+pub mod voice;
 
 pub use audio::*;
 pub use display::*;
 pub use ext::*;
 pub use game::*;
+pub use keymap::*;
 pub use paths::*;
 pub use save::*;
+pub use skin::*;
 pub use sprites::*;
 pub use style::*;
+pub use text::*;
 pub use ui::*;
+pub use voice::*;
 
 use serde::Deserialize;
 use std::path::Path;
@@ -44,6 +52,12 @@ pub struct Config {
     pub save: SaveCfg,
     pub auto: AutoCfg,
     pub game: GameCfg,
+    /// 正文字体/字号/行距/描边（作者默认，玩家可覆盖）
+    pub text: TextCfg,
+    /// 语音通道
+    pub voice: VoiceCfg,
+    /// 键位映射（作者默认 ← YAML，玩家覆盖 ← global.json）
+    pub keymap: KeyMapCfg,
     /// 拓展声明（见 ext/ 实现）
     pub extensions: Vec<ExtCfg>,
 }

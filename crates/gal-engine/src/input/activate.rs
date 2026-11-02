@@ -61,6 +61,12 @@ pub fn bottombar_activate(
     idx: usize,
     thumbs: &mut ThumbCache,
 ) -> Result<bool, String> {
+    // idx 是按钮在配置里的位置，先转成固定动作号（作者可删按钮）
+    let Some(idx) =
+        g.conf.ui.bottombar.buttons.get(idx).and_then(|l| gal_ui::bottombar::action_of(l))
+    else {
+        return Ok(true);
+    };
     match idx {
         0 => {
             g.auto = !g.auto;

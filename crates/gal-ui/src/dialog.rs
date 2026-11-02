@@ -26,10 +26,12 @@ pub fn draw(
     let b = style.box_rect;
     let br = Rect::new(b[0], b[1], b[2] as u32, b[3] as u32);
 
-    // 盒子：半透明深底 + 细边
-    canvas.set_draw_color(Color::RGBA(10, 12, 26, 205));
+    // 盒子：当前皮肤的半透明底 + 细边
+    let f = style.fill;
+    canvas.set_draw_color(Color::RGBA(f[0], f[1], f[2], f[3]));
     canvas.fill_rect(br)?;
-    canvas.set_draw_color(Color::RGBA(255, 255, 255, 60));
+    let bd = style.border;
+    canvas.set_draw_color(Color::RGBA(bd[0], bd[1], bd[2], bd[3]));
     canvas.draw_rect(br)?;
 
     // 名字牌：悬于盒子上沿左侧
@@ -54,7 +56,18 @@ pub fn draw(
 
     // 正文：单行单次纹理缓存 + 字符宽度裁剪绘制（彻底消灭逐字创建纹理的显存暴涨）
     let (cur_line, cur_chars) = tw.reveal_pos();
-    let line_h = fonts.line_h(style.font_size);
+    let line_h = fonts.line_h_spaced(style.font_size, style.line_spacing);
+    let [tr, tg, tb] = style.text_color;
+    let color = Color::RGB(tr, tg, tb);
+    // 描边模式下字形纹理四周各扩 outline 像素，绘制时反向外移对齐
+    let o = style.outline as i32;
+    let [sx, sy] = style.shadow_offset;
+    let shadow = if sx != 0 || sy != 0 {
+        let [sr, sg, sb] = style.shadow_color;
+        Some(Color::RGB(sr, sg, sb))
+    } else {
+        None
+    };
     for (i, line) in tw.current_page().iter().enumerate() {
         if i > cur_line || line.is_empty() {
             break;
@@ -64,30 +77,33 @@ pub fn draw(
         if shown == 0 {
             continue;
         }
-        let show_w = if shown < total_chars {
-            Some(fonts.line_prefix_w(style.font_size, line, shown))
-        } else {
-            None
-        };
-        let tex = fonts.render_text(style.font_size, Color::RGB(242, 242, 246), line)?;
+        let x = style.text_x - o;
+        let y = style.text_y + i as i32 * line_h - o;
+        // 打字机裁剪宽度（含描边外扩）
+        let clip_w = (shown < total_chars)
+            .then(|| fonts.line_prefix_w(style.font_size, line, shown) + o as u32);
+        // 先铺阴影（同字形另色纹理），再盖正文
+        if let Some(sc) = shadow {
+            let tex = fonts.render_outlined(style.font_size, sc, line, style.outline)?;
+            let q = tex.query();
+            let w = clip_w.map_or(q.width, |w| w.min(q.width));
+            let src = clip_w.map(|_| Rect::new(0, 0, w, q.height));
+            canvas.copy(tex, src, Some(Rect::new(x + sx, y + sy, w, q.height)))?;
+        }
+        let tex = fonts.render_outlined(style.font_size, color, line, style.outline)?;
         let q = tex.query();
-        let (src, dst) = match show_w {
-            None => {
-                (None, Rect::new(style.text_x, style.text_y + i as i32 * line_h, q.width, q.height))
-            }
+        let dst = match clip_w {
             Some(w) => {
                 let w = w.min(q.width);
-                (
-                    Some(Rect::new(0, 0, w, q.height)),
-                    Rect::new(style.text_x, style.text_y + i as i32 * line_h, w, q.height),
-                )
+                (Some(Rect::new(0, 0, w, q.height)), Rect::new(x, y, w, q.height))
             }
+            None => (None, Rect::new(x, y, q.width, q.height)),
         };
-        canvas.copy(tex, src, Some(dst))?;
+        canvas.copy(tex, dst.0, Some(dst.1))?;
     }
 
-    // 页满指示：右下角「▼」呼吸
-    if tw.page_full() {
+    // 页满指示：右下角「▼」呼吸（作者可关）
+    if tw.page_full() && style.wait_marker {
         let a = (140.0 + 100.0 * (now_ms / 400.0).sin()) as u8;
         canvas.set_draw_color(Color::RGBA(255, 255, 255, a));
         let bx = br.right() - 34;

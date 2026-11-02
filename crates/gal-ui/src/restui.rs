@@ -45,6 +45,6 @@ pub fn draw(
         Some(Rect::new((LOGICAL_W - q.width) as i32 / 2, 320, q.width, q.height)),
     )?;
 
-    button(canvas, fonts, cancel_rect(), "「再待一会儿」", false)?;
+    button(canvas, fonts, cancel_rect(), "「再待一会儿」", 30, false, &conf.ui.button)?;
     Ok(())
 }
