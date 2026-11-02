@@ -150,6 +150,61 @@ fn call与return解析() {
 }
 
 #[test]
+fn 自由层layer解析与层号校验() {
+    match cmd("layer", "7 free/a").unwrap() {
+        Command::Layer { n, storage, fade_ms } => {
+            assert_eq!((n, storage.as_str(), fade_ms), (7, "free/a", 700));
+        }
+        _ => panic!(),
+    }
+    match cmd("layer", "5 free/a 300").unwrap() {
+        Command::Layer { n, fade_ms, .. } => assert_eq!((n, fade_ms), (5, 300)),
+        _ => panic!(),
+    }
+    assert!(matches!(cmd("layer", "9 hide").unwrap(), Command::Layer { n: 9, .. }));
+    // 0-4 是保留层号；64 起超上限
+    assert!(cmd("layer", "0 x").is_err());
+    assert!(cmd("layer", "4 x").is_err());
+    assert!(cmd("layer", "64 x").is_err());
+    assert!(cmd("layer", "7").is_err());
+}
+
+#[test]
+fn 转场trans与wt解析() {
+    match cmd("trans", "0 bg/next").unwrap() {
+        Command::Trans { n, storage, dur_ms, method } => {
+            assert_eq!(
+                (n, storage.as_str(), dur_ms, method.as_str()),
+                (0, "bg/next", 700, "universal")
+            );
+        }
+        _ => panic!(),
+    }
+    match cmd("trans", "4 cg/a 900 crossfade").unwrap() {
+        Command::Trans { n, dur_ms, method, .. } => {
+            assert_eq!((n, dur_ms, method.as_str()), (4, 900, "crossfade"));
+        }
+        _ => panic!(),
+    }
+    match cmd("trans", "9 free/a 300").unwrap() {
+        Command::Trans { n, dur_ms, method, .. } => {
+            assert_eq!((n, dur_ms, method.as_str()), (9, 300, "universal"));
+        }
+        _ => panic!(),
+    }
+    // 三参数且第三参不是数字 → 当 method（宽容写法）
+    match cmd("trans", "5 free/a crossfade").unwrap() {
+        Command::Trans { dur_ms, method, .. } => {
+            assert_eq!((dur_ms, method.as_str()), (700, "crossfade"));
+        }
+        _ => panic!(),
+    }
+    assert!(cmd("trans", "64 x").is_err());
+    assert!(cmd("trans", "0").is_err());
+    assert!(matches!(cmd("wt", "").unwrap(), Command::WaitTrans));
+}
+
+#[test]
 fn 演示剧本start_ks全量解析通过() {
     let script = include_str!("../../../../template/game/data/scenario/start.ks");
     let lines = crate::lexer::parse_script(script).expect("词法解析通过");

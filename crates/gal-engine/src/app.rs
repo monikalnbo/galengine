@@ -145,7 +145,7 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
         for (kind, storage) in g.interp.lookahead_storages(40) {
             bank.prefetch_asset(&assets::resolve(kind, &storage));
         }
-        let cur_bg = g.interp.stage.bg.cur().cloned();
+        let cur_bg = g.interp.stage.bg().cur().cloned();
         if cur_bg != last_bg {
             last_bg = cur_bg;
             let mut keep = std::collections::HashSet::new();

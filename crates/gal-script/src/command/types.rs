@@ -33,6 +33,21 @@ pub enum Command {
         storage: String,
         fade_ms: u32,
     },
+    /// 自由层（KAG3 `layer n storage [ms]`：层号 5-63，合成按层号升序）
+    Layer {
+        n: u8,
+        storage: String,
+        fade_ms: u32,
+    },
+    /// 层转场（P1-1 `trans n [ms] [method]`）：目标层在 ms 内交叉淡化到新素材
+    Trans {
+        n: u8,
+        storage: String,
+        dur_ms: u32,
+        method: String,
+    },
+    /// 等待在途转场结束（KAG3 `wt` 的转场形态）
+    WaitTrans,
     Clear,
     Wait(u32),
     N(String),

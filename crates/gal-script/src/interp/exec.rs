@@ -6,12 +6,26 @@ use crate::command::Command;
 use crate::vars::Value;
 use gal_config::paths::resolve;
 
+/// 自由层素材路径：先按 bg/cg 图库解析，找不到再用数据目录直取。
+fn resolve_layer(_n: u8, storage: &str) -> String {
+    let p = resolve("cg", storage);
+    if std::path::Path::new(&p).exists() {
+        return p;
+    }
+    let direct = format!("{}/{}", gal_config::data_dir(), storage);
+    if std::path::Path::new(&direct).exists() {
+        return direct;
+    }
+    p
+}
+
 impl Interp {
     /// 执行一条指令；返回 Ok(true) 表示遇到等待点（台词/选项/定时/输入/结束）
     pub(crate) fn exec(&mut self, cmd: Command, ctx: &str) -> Result<bool, String> {
         match cmd {
             Command::Bg { storage, fade_ms } => {
-                self.stage.bg.set(Some(resolve("bg", &storage)), fade_ms);
+                let next = if storage == "hide" { None } else { Some(resolve("bg", &storage)) };
+                self.stage.set_layer(crate::stage::BG_LAYER, next, fade_ms)?;
                 Ok(false)
             }
             Command::Bgm(n) => {
@@ -35,7 +49,7 @@ impl Interp {
             }
             Command::Char { layer, storage, x, y } => {
                 let next = if storage == "hide" { None } else { Some(resolve("char", &storage)) };
-                let l = &mut self.stage.chars[layer as usize];
+                let l = self.stage.char_mut(layer as usize);
                 l.set(next, self.char_fade_ms);
                 l.chibi = storage != "hide" && self.chibi.contains(storage.as_str());
                 if let (Some(ox), Some(oy)) = (x, y) {
@@ -45,7 +59,7 @@ impl Interp {
             }
             Command::CharPos { layer, storage, pos_name } => {
                 let next = if storage == "hide" { None } else { Some(resolve("char", &storage)) };
-                let l = &mut self.stage.chars[layer as usize];
+                let l = self.stage.char_mut(layer as usize);
                 l.set(next, self.char_fade_ms);
                 l.chibi = storage != "hide" && self.chibi.contains(storage.as_str());
                 // pos_name 形如 "far_left 0"：取首词查 positions（config 注入）
@@ -66,9 +80,58 @@ impl Interp {
                 if next.is_some() {
                     self.unlock_cg(&storage);
                 }
-                self.stage.cg.set(next, fade_ms);
+                self.stage.set_layer(crate::stage::CG_LAYER, next, fade_ms)?;
                 Ok(false)
             }
+            Command::Layer { n, storage, fade_ms } => {
+                if storage == "hide" {
+                    self.stage.ensure_layer(n as usize)?;
+                    self.stage.layers[n as usize].set(None, fade_ms);
+                    return Ok(false);
+                }
+                // 自由层素材：先探 bg/cg 图库，再回落到数据目录直取（兼容任意贴图）
+                let path = resolve_layer(n, &storage);
+                self.stage.set_layer(n as usize, Some(path), fade_ms)?;
+                Ok(false)
+            }
+            Command::Trans { n, storage, dur_ms, method } => {
+                let to = match storage.as_str() {
+                    // hide 等价于淡出到空：旧内容作 from、目标为空，不换图
+                    "hide" => String::new(),
+                    _ => {
+                        if n as usize == crate::stage::CG_LAYER {
+                            self.unlock_cg(&storage);
+                        }
+                        resolve_layer(n, &storage)
+                    }
+                };
+                if to.is_empty() {
+                    // 淡出：把旧内容定格成转场片段、目标层立即清空
+                    let old = self.stage.layer(n as usize).and_then(|l| l.cur.clone());
+                    self.stage.ensure_layer(n as usize)?;
+                    self.stage.layers[n as usize].set(None, 0);
+                    self.stage.trans = Some(crate::stage::TransClip {
+                        method: crate::stage::TransMethod::parse(&method),
+                        layer: n as usize,
+                        to: String::new(),
+                        from: old,
+                        offset: self.stage.layers[n as usize].offset,
+                        dur_ms: dur_ms as f32,
+                        left_ms: dur_ms as f32,
+                    });
+                } else {
+                    let m = crate::stage::TransMethod::parse(&method);
+                    self.stage.start_trans(n as usize, to, dur_ms, m);
+                }
+                Ok(false)
+            }
+            Command::WaitTrans => match self.stage.trans_left_ms() {
+                Some(left) => {
+                    self.state = RunState::WaitTimer { left_ms: left };
+                    Ok(true)
+                }
+                None => Ok(false),
+            },
             Command::Clear => {
                 self.tw.clear();
                 self.cur_name = None;

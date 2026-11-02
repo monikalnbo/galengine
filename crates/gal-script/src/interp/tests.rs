@@ -15,10 +15,10 @@ fn q版名单标记层() {
     it.chibi.insert("chibi_normal".into());
     it.exec(Command::Char { layer: 1, storage: "chibi_normal".into(), x: None, y: None }, "t.ks:1")
         .unwrap();
-    assert!(it.stage.chars[1].chibi);
+    assert!(it.stage.char(1).chibi);
     it.exec(Command::Char { layer: 1, storage: "hide".into(), x: None, y: None }, "t.ks:2")
         .unwrap();
-    assert!(!it.stage.chars[1].chibi);
+    assert!(!it.stage.char(1).chibi);
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn 预设位置从注入的配置查表() {
         "t.ks:1",
     )
     .unwrap();
-    assert_eq!(it.stage.chars[1].offset, (-140, 20));
+    assert_eq!(it.stage.char(1).offset, (-140, 20));
 }
 
 #[test]
@@ -61,10 +61,10 @@ fn 立绘切换使用注入的淡入时长() {
     it.char_fade_ms = 1200;
     it.exec(Command::Char { layer: 0, storage: "alice".into(), x: None, y: None }, "t.ks:1")
         .unwrap();
-    assert_eq!(it.stage.chars[0].dur, 1200.0);
+    assert_eq!(it.stage.char(0).dur, 1200.0);
     it.exec(Command::Char { layer: 0, storage: "hide".into(), x: None, y: None }, "t.ks:2")
         .unwrap();
-    assert_eq!(it.stage.chars[0].dur, 1200.0);
+    assert_eq!(it.stage.char(0).dur, 1200.0);
 }
 
 #[test]
@@ -215,6 +215,66 @@ fn if块配对错误带行号() {
     let e =
         crate::interp::blocks::pair(&crate::lexer::parse_script("else\n").unwrap()).unwrap_err();
     assert!(e.contains("没有配对的 if"), "{e}");
+}
+
+#[test]
+fn 自由层写进统一层表并可存档恢复() {
+    let mut it = interp();
+    it.exec(Command::Layer { n: 7, storage: "overlay".into(), fade_ms: 500 }, "t.ks:1").unwrap();
+    let p7 = it.stage.layer(7).unwrap().cur.clone().expect("自由层已设置");
+    assert!(p7.contains("overlay"), "{p7}");
+    // 合成顺序：自由层排在 cg(4) 之后
+    let order: Vec<usize> =
+        it.stage.ordered_layers().filter(|(_, _, l)| l.visible()).map(|(n, ..)| n).collect();
+    assert_eq!(order, vec![7]);
+
+    let snap = it.stage.snapshot();
+    assert_eq!(snap.layers, vec![(7, p7.clone())]);
+    let mut back = interp();
+    back.stage.restore(snap);
+    assert_eq!(back.stage.layer(7).unwrap().cur.as_deref(), Some(p7.as_str()));
+
+    // hide 走同一层表，不报错
+    it.exec(Command::Layer { n: 7, storage: "hide".into(), fade_ms: 0 }, "t.ks:2").unwrap();
+    assert!(it.stage.layer(7).unwrap().cur.is_none());
+}
+
+#[test]
+fn 转场沿用目标层内容且按时长收敛() {
+    let mut it = interp();
+    it.stage.set_layer(0, Some("old/bg".into()), 0).unwrap();
+    it.exec(
+        Command::Trans { n: 0, storage: "bg/next".into(), dur_ms: 400, method: "crossfade".into() },
+        "t.ks:1",
+    )
+    .unwrap();
+    // 目标层内容立即切到新素材（存档语义 = 转场后状态）
+    let cur = it.stage.bg().cur.clone().unwrap();
+    assert!(cur.contains("bg/next"), "{cur}");
+    let t = it.stage.trans.as_ref().expect("应有在途转场");
+    assert_eq!(t.from.as_deref(), Some("old/bg"));
+    assert_eq!(t.method, crate::stage::TransMethod::Crossfade);
+    assert_eq!(t.alpha(), 0.0);
+    // wt 等到转场结束
+    it.exec(Command::WaitTrans, "t.ks:2").unwrap();
+    assert!(matches!(it.state, crate::interp::RunState::WaitTimer { .. }));
+    it.stage.tick(400.0);
+    assert!(it.stage.trans.is_none());
+}
+
+#[test]
+fn 转场hide淡出到空且不换图() {
+    let mut it = interp();
+    it.stage.set_layer(4, Some("cg/a".into()), 0).unwrap();
+    it.exec(
+        Command::Trans { n: 4, storage: "hide".into(), dur_ms: 300, method: "universal".into() },
+        "t.ks:1",
+    )
+    .unwrap();
+    assert!(it.stage.cg().cur.is_none());
+    let t = it.stage.trans.as_ref().expect("应有淡出片段");
+    assert_eq!(t.from.as_deref(), Some("cg/a"));
+    assert!(t.to.is_empty());
 }
 
 #[test]

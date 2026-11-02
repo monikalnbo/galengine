@@ -98,6 +98,54 @@ impl Command {
                 [s, ms] => Ok(Command::Cg { storage: s.to_string(), fade_ms: num(ms)? }),
                 _ => err("cg 用法：cg 素材 [淡入ms] / cg hide [ms]"),
             },
+            "layer" => match tokens.as_slice() {
+                // 自由层：层号 >=5（0-4 是 bg/立绘/cg 的保留层号）
+                [n, s] => Ok(Command::Layer {
+                    n: free_layer_of(n, ctx)?,
+                    storage: s.to_string(),
+                    fade_ms: 700,
+                }),
+                [n, s, ms] => Ok(Command::Layer {
+                    n: free_layer_of(n, ctx)?,
+                    storage: s.to_string(),
+                    fade_ms: num(ms)?,
+                }),
+                _ => err("layer 用法：layer 层号(5-63) 素材|hide [淡入ms]"),
+            },
+            "trans" => match tokens.as_slice() {
+                // 形式：trans 层号 素材 [ms] [method]；ms 可省略（默认 700，与 bg/cg 一致）
+                [n, s] => Ok(Command::Trans {
+                    n: trans_layer_of(n, ctx)?,
+                    storage: s.to_string(),
+                    dur_ms: 700,
+                    method: "universal".into(),
+                }),
+                [n, s, ms] => match num::<u32>(ms) {
+                    Ok(dur) => Ok(Command::Trans {
+                        n: trans_layer_of(n, ctx)?,
+                        storage: s.to_string(),
+                        dur_ms: dur,
+                        method: "universal".into(),
+                    }),
+                    // 第三参数不是毫秒 → 当作 method（`trans 0 bg/b 500 crossfade`
+                    // 是四参数形态，三参数时不可能是 method）
+                    Err(_) => Ok(Command::Trans {
+                        n: trans_layer_of(n, ctx)?,
+                        storage: s.to_string(),
+                        dur_ms: 700,
+                        method: ms.to_string(),
+                    }),
+                },
+                [n, s, ms, m] => Ok(Command::Trans {
+                    n: trans_layer_of(n, ctx)?,
+                    storage: s.to_string(),
+                    dur_ms: num(ms)?,
+                    method: m.to_string(),
+                }),
+                _ => err("trans 用法：trans 层(0-63) 素材 [ms] [universal|crossfade]"),
+            },
+            // KAG3 `wt`：多种等待类型；当前只实装转场等待（其余参数忽略）
+            "wt" => Ok(Command::WaitTrans),
             "clear" => Ok(Command::Clear),
             "wait" => match tokens.as_slice() {
                 [ms] => Ok(Command::Wait(num(ms)?)),
@@ -257,6 +305,28 @@ impl Command {
 /// 立绘层号（0-2），越界给出带行号的中文错误
 fn layer_of(l: &str, ctx: &str) -> Result<u8, String> {
     l.parse::<u8>().ok().filter(|n| *n < 3).ok_or(format!("{ctx}：立绘层必须是 0-2"))
+}
+
+/// 自由层号：>=5（0-4 归 bg/立绘/cg），上限 63
+fn free_layer_of(n: &str, ctx: &str) -> Result<u8, String> {
+    n.parse::<u8>()
+        .ok()
+        .filter(|n| {
+            (crate::stage::FREE_LAYER_FIRST..crate::stage::MAX_LAYERS).contains(&(*n as usize))
+        })
+        .ok_or(format!(
+            "{ctx}：自由层号必须是 {}-{}（0-4 保留给 bg/立绘/cg）",
+            crate::stage::FREE_LAYER_FIRST,
+            crate::stage::MAX_LAYERS - 1
+        ))
+}
+
+/// 转场目标层号：0-63 全部可转（含 bg/立绘/cg/自由层）
+fn trans_layer_of(n: &str, ctx: &str) -> Result<u8, String> {
+    n.parse::<u8>()
+        .ok()
+        .filter(|n| (*n as usize) < crate::stage::MAX_LAYERS)
+        .ok_or(format!("{ctx}：转场层号必须是 0-{}", crate::stage::MAX_LAYERS - 1))
 }
 
 fn jump(file: Option<String>, target: &str) -> Command {

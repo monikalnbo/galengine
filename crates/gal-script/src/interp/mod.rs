@@ -108,6 +108,10 @@ impl Interp {
                         ("cg", [s, ..]) if *s != "hide" => out.push(("cg", s.to_string())),
                         ("char", [_, s, ..]) if *s != "hide" => out.push(("char", s.to_string())),
                         ("reach", [s, ..]) if *s != "hide" => out.push(("cg", s.to_string())),
+                        // 自由层素材与 cg 同图库（resolve_layer 也是先按 cg 探测）
+                        ("layer", [_, s, ..]) if *s != "hide" => out.push(("cg", s.to_string())),
+                        // 转场素材同样先按 bg/cg 图库探测
+                        ("trans", [_, s, ..]) if *s != "hide" => out.push(("cg", s.to_string())),
                         _ => {}
                     }
                 }
@@ -163,7 +167,7 @@ impl Interp {
         self.load(file)?;
         self.vars.f = fvars;
         self.stage.restore(snap);
-        for c in &mut self.stage.chars {
+        for c in self.stage.chars_mut() {
             c.chibi = c.cur().is_some_and(|p| self.chibi.iter().any(|name| p.contains(name)));
         }
         self.tw.clear();
