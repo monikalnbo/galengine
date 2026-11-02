@@ -16,6 +16,7 @@ game/data/
 ├── fgimage/*.png      立绘，1280×720 整幅透明画布（人物外全透明）
 ├── bgm/               BGM（wav/ogg/mp3），文件名 = 剧本里 bgm 后的名
 ├── sound/             音效 SE，文件名 = 剧本里 se 后的名
+├── voice/             语音（可选；`voice 角色/文件名` 或 `voice 文件名`）
 └── system/font.ttf    可选：随包中文字体（没有则回退 Linux Noto / Windows 雅黑）
 ```
 
@@ -34,6 +35,7 @@ game/data/
 | `cg 素材 [ms]` / `cg hide [ms]` | CG 全屏；**cg_* 自动解锁进鉴赏** |
 | `bgm 名` / `bgm stop` / `bgm fadeout ms` | BGM 循环 / 停止 / 淡出；缺文件静默；BGM 随存档 |
 | `se 名` | 音效一次 |
+| `voice 名` / `voice stop` | 语音一次；查找 `voice/<角色>/<名>` 或 `voice/<名>`；播放时按 `voice.duck` 压低 BGM/SE |
 | `clear` | 清空对话框 |
 | `wait ms` | 强制等待，**玩家不可跳过**（快进也无效） |
 
@@ -55,7 +57,8 @@ game/data/
 | `input 变量 提示\|宽\|默认值` | 名字输入（支持输入法 + 预设名按钮兜底） |
 
 变量空间：`f.*` 随存档走；`sf.*` 全局（退出即写 `savedata/global.json`）。
-引擎保留名：`sf.playerName` `sf.cgs` `sf.volBgm` `sf.volSe` `sf.textSpeed`。
+引擎保留名：`sf.playerName` `sf.cgs` `sf.volBgm` `sf.volSe` `sf.volVoice` `sf.textSpeed` `sf.autoDelay` `sf.textSize` `sf.lineSpacing` `sf.waitMarker` `sf.outline` `sf.fontFamily` `sf.skipRead` `sf.transOn` `sf.skinIndex` `sf.keymap.<动作>`。
+剧本里 `set sf.textSize = 34` 这类写法会在下一帧立即生效（与设置面板同一套值）。
 
 ### meta 演出（打破第四面墙）
 | 指令 | 说明 |
@@ -145,6 +148,9 @@ ES_SCRIPT=xx.ks ES_DEBUG=1 ES_DEBUG_AUTOCLICK_MS=400 ES_DATA_DIR=<你的>/game/d
 ## 5. game.yaml（游戏侧唯一配置源）
 
 只写想覆盖的字段，缺省自动回退内置默认值（**零配置也能跑**）。config.json 已废除。
+**文档里出现的字段全部真实生效**；已废弃/从未实现的字段（`letterbox`、`box_image`、
+`opacity`、`item_image`、`bottombar.enabled`、`button.radius`、`menu_gap` 等）已从引擎
+删除，旧 game.yaml 里残留它们不会报错，会被直接忽略。
 
 ```yaml
 meta:
@@ -155,31 +161,34 @@ meta:
   donation_text: ""
 
 display:
-  width: 1280                  # 窗口尺寸（逻辑分辨率恒 1280×720）
+  width: 1280                  # 窗口初始尺寸（逻辑分辨率恒 1280×720，按比例缩放）
   height: 720
-  letterbox: true
-  resizable: true
+  resizable: true              # 窗口能否被玩家拉伸
   bg_saturation: 1.0           # 背景饱和度（<1 降饱和护眼，仅作用 bgimage）
 
 ui:
-  dialog:                      # 对话框
-    box_image: null            # 底图（null=半透明黑）
+  dialog:                      # 对话框（盒体配色由 ui.skin 决定）
     box_rect: [56, 514, 1168, 172]
     text_x: 104
     text_y: 542
-    font_size: 30
+    font_size: 30              # 基准字号（text.size 优先）
     name_font_size: 30
     lines_per_page: 3
-    typewriter_ms: 30          # 每字毫秒
-    opacity: 170
-  choice:                      # 选项（item_image/item_hover_image 可换肤）
+    typewriter_ms: 30          # 每字毫秒（玩家「文字速度」覆盖）
+  choice:                      # 选项列表
     item_width: 760
     item_height: 66
     gap: 18
     top_y: 236
     font_size: 28
-  bottombar:                   # 对话框底功能条（自动/快进/存档/读档/设置）
-    enabled: true
+  bottombar:                   # 对话框底功能条
+    buttons: [自动, 快进, 存档, 读档, 设置]   # 空列表 = 不显示底栏
+    button_width: 92
+    button_height: 28
+    gap: 10
+    y: 689                     # 底栏顶边 y（逻辑坐标；默认贴底）
+    right_align: 1180
+    font_size: 20
   title:                       # 标题画面
     background: bgimage/title.jpg   # 或 null=渐变
     title_text_y: 100
@@ -187,7 +196,6 @@ ui:
     hint_text: "— select —"
     hint_y: 238
     menu_top_y: 270
-    menu_gap: 76
   menu:                        # Esc 系统菜单
     item_width: 380
     item_height: 62
@@ -201,17 +209,32 @@ ui:
     confirm_y: 480
     hint_y: 575
     veil_alpha: 160
+    max_len: 12                # 名字最大字符数
   cursor:                      # 自定义鼠标两态（32×32 透明 PNG；null=系统默认）
     default: image/cursor.png
     click: image/cursor_click.png
     hotspot: [0, 0]
-  button:                      # 通用按钮（图片优先，否则 fill/border 配色）
+  button:                      # 通用按钮配色（选项/菜单/底栏/输入页/存读档共用）
     fill_normal: [28, 34, 58, 215]
     fill_accent: [52, 74, 128, 235]
+    border_normal: [130, 150, 200, 150]
+    border_accent: [150, 200, 255, 220]
     text_normal: [210, 216, 232]
     text_accent: [255, 255, 255]
     border_width: 1
-    radius: null
+  skin:                        # 可切换皮肤：对话框盒 + 底栏配色（玩家设置里切）
+    schemes:
+      - name: 夜色              # 未配置 = 只用这一套内置皮肤
+        dialog_fill: [10, 12, 26, 205]
+        dialog_border: [255, 255, 255, 60]
+        dialog_text: null      # null = 跟随 text.color
+        bar_fill: [28, 34, 58, 215]
+        bar_accent: [52, 74, 128, 235]
+        bar_border: [120, 138, 185, 150]
+        bar_text: [205, 212, 230]
+      - name: 暖夜
+        dialog_fill: [46, 20, 20, 210]
+        dialog_border: [200, 120, 90, 220]
   layers:                      # 图层叠加：任意界面的多层组合定义
     title_extra:               # 名字可自定义，界面代码按名取用
       - image: bgimage/title_glow.png
@@ -222,6 +245,34 @@ ui:
         rect: [0, 60, 1280, 80]
         font_size: 48
         color: [255, 255, 255]
+
+text:                          # 正文排版作者默认值（玩家可在设置里覆盖）
+  size: 0                      # 0 = 跟随 ui.dialog.font_size
+  line_spacing: 0              # 像素，叠加在字体推荐行高之上
+  color: [242, 242, 246]
+  outline: 0                   # 描边宽度（SDL_ttf 描边与字同色）
+  shadow_offset: [0, 0]        # [dx, dy]；0,0 = 无阴影
+  shadow_color: [0, 0, 0]
+  wait_marker: true            # 页满是否画「▼」
+  families:                    # 设置面板「字体」下拉的候选（空 = 只用 fonts 候选链）
+    - name: Noto Sans CJK SC
+      path: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
+
+voice:
+  dir: voice                   # 语音目录（相对数据目录）
+  volume: 100                  # 默认音量 0-100（玩家 sf.volVoice 覆盖）
+  duck: 0.45                   # 语音播放时 BGM/SE 压到的比例（1.0 = 不压低）
+
+keymap:                        # 键位作者默认；玩家在设置「键位」组重绑
+  bindings:
+    next: [Return, KpEnter, Space]
+    auto: [A]
+    skip: [LCtrl, RCtrl]
+    backlog: [PageUp]
+    menu: [Escape]
+    save: [F9]
+    load: [F10]
+    fullscreen: [F11]
 
 sprites:
   layers: 3                    # 立绘层数
@@ -234,11 +285,11 @@ sprites:
   chibi: [chibi_girl]          # Q版立绘名单（出场时背景自动虚化突出角色）
 
 audio:
-  bgm_dir: bgm
-  se_dir: sound
+  bgm_dir: bgm                 # BGM 子目录（相对数据目录）
+  se_dir: sound                # SE 子目录
   bgm_volume: 80               # 0-100（玩家可在设置改，全局持久化）
   se_volume: 90
-  fade_ms: 800
+  fade_ms: 800                 # 切 BGM 时的淡入时长
 
 fonts:                         # 字体候选链，逐个尝试
   - game/data/system/font.ttf
@@ -248,7 +299,7 @@ fonts:                         # 字体候选链，逐个尝试
 save:
   dir: savedata
   slots: 9
-  auto_save_ms: 0              # 自动存档间隔（0=关）
+  auto_save_ms: 0              # 自动存档间隔（0=关；>0 时按此间隔写最近槽位）
 
 auto:
   delay_ms: 1000               # 自动模式翻页等待
@@ -276,6 +327,29 @@ extensions:                    # 拓展声明（见 §2 拓展指令）
     default_ms: 7000
     pick: 迟疑                 # 超时自动选含此文字的选项
 ```
+
+### 玩家设置面板（`savedata/global.json`）
+
+Esc →「设置」打开，分页显示，改动**立刻生效并立即写盘**，重启仍在。玩家值存在
+`global.json` 的 `sf.*` 里，作者默认值（上面的 game.yaml）不会因此被改动；
+「恢复默认设置」= 回到作者默认值。
+
+| 组 | 项目 | 存储键 | 生效范围 |
+|---|---|---|---|
+| 文字 | 文字速度 | `sf.textSpeed` | 打字机每字毫秒 |
+| 文字 | 自动播放间隔 | `sf.autoDelay` | 自动模式翻页等待 |
+| 文字 | 字号 | `sf.textSize` | 正文字号（当前台词立即重排） |
+| 文字 | 行距 | `sf.lineSpacing` | 行高追加像素 |
+| 文字 | 等待标记 ▼ | `sf.waitMarker` | 页满标记开/关 |
+| 文字 | 文字描边 | `sf.outline` | 描边宽度 0-4px |
+| 文字 | 字体 | `sf.fontFamily` | 切到 `text.families` 第 N 项 |
+| 文字 | 跳过已读 | `sf.skipRead` | 快进只跳已读行 |
+| 显示 | 全屏 | 窗口状态 | 立即切全屏/窗口 |
+| 显示 | 转场动画 | `sf.transOn` | 关=转场直接切图 |
+| 显示 | 界面皮肤 | `sf.skinIndex` | 换 `ui.skin.schemes` 第 N 套 |
+| 音频 | BGM / 音效 / 语音音量 | `sf.volBgm` / `sf.volSe` / `sf.volVoice` | 三通道即时调音量 |
+| 键位 | 8 个动作重绑 | `sf.keymap.<动作>` | 按键即绑，Esc 取消 |
+| 其他 | 恢复默认设置 / 打赏 | — | 重置全部玩家值 / 打开 donation_url |
 
 ## 6. 发布
 
