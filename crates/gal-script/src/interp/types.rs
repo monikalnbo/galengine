@@ -10,19 +10,38 @@ pub fn dbg() -> bool {
 pub enum SysEvent {
     Bgm(String),
     BgmStop,
-    BgmFadeOut { ms: u32 },
+    BgmFadeOut {
+        ms: u32,
+    },
     Se(String),
-    MetaFake { date: String, time: String, image: String },
+    MetaFake {
+        date: String,
+        time: String,
+        image: String,
+    },
     MetaCorrupt(String),
     MetaDeleteLast,
     TitleEvolve(String),
-    Reach { path: String, dur_ms: u32, scale: f32 },
+    Reach {
+        path: String,
+        dur_ms: u32,
+        scale: f32,
+    },
     ReachHide,
     Shake(u32),
+    /// 立绘左右摇晃：层 / 次数 / 单周期ms
+    CharSway {
+        layer: u8,
+        count: u32,
+        period_ms: u32,
+    },
     SetTitle(String),
     RestoreTitle,
     Shutdown(u32),
-    DesktopWrite { file: String, content: String },
+    DesktopWrite {
+        file: String,
+        content: String,
+    },
     DesktopOpen(String),
 }
 

@@ -63,6 +63,9 @@ impl Game {
                     r.t = 0.0;
                 }
             }
+            SysEvent::CharSway { layer, count, period_ms } => {
+                self.interp.stage.start_sway(layer as usize, count, period_ms);
+            }
             SysEvent::Shake(ms) => {
                 self.sys.shake = Some(ShakeSt { left_ms: ms as f32, dur_ms: ms as f32 });
             }

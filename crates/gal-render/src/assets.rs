@@ -138,4 +138,3 @@ impl<'a> TextureBank<'a> {
 pub fn resolve(kind: &str, storage: &str) -> String {
     gal_config::paths::resolve(kind, storage)
 }
-

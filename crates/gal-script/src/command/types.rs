@@ -1,35 +1,95 @@
-//! 全 26 条指令的枚举定义
+//! 全部剧本指令的枚举定义（数量以本文件变体为准）
 
 #[derive(Debug, Clone)]
 pub enum Command {
-    Bg { storage: String, fade_ms: u32 },
+    Bg {
+        storage: String,
+        fade_ms: u32,
+    },
     Bgm(String),
     BgmStop,
-    BgmFadeOut { ms: u32 },
+    BgmFadeOut {
+        ms: u32,
+    },
     Se(String),
-    Char { layer: u8, storage: String, x: Option<i32>, y: Option<i32> },
-    CharPos { layer: u8, storage: String, pos_name: String },
-    Cg { storage: String, fade_ms: u32 },
+    Char {
+        layer: u8,
+        storage: String,
+        x: Option<i32>,
+        y: Option<i32>,
+    },
+    /// 立绘左右摇晃（KAG3 charsway：层 次数 周期ms）
+    CharSway {
+        layer: u8,
+        count: u32,
+        period_ms: u32,
+    },
+    CharPos {
+        layer: u8,
+        storage: String,
+        pos_name: String,
+    },
+    Cg {
+        storage: String,
+        fade_ms: u32,
+    },
     Clear,
     Wait(u32),
     N(String),
-    Name { name: String, text: String },
-    Flag { var: String, op: char, val: i64 },
-    Set { var: String, expr: String },
-    Jump { file: Option<String>, label: String },
-    If { var: String, op: String, val: String, target: String },
-    Choice { prompt: String, items: Vec<(String, String)> },
-    Input { var: String, prompt: String, width: u32, default: String },
-    MetaFakeSave { date: String, time: String, image: String },
+    Name {
+        name: String,
+        text: String,
+    },
+    Flag {
+        var: String,
+        op: char,
+        val: i64,
+    },
+    Set {
+        var: String,
+        expr: String,
+    },
+    Jump {
+        file: Option<String>,
+        label: String,
+    },
+    If {
+        var: String,
+        op: String,
+        val: String,
+        target: String,
+    },
+    Choice {
+        prompt: String,
+        items: Vec<(String, String)>,
+    },
+    Input {
+        var: String,
+        prompt: String,
+        width: u32,
+        default: String,
+    },
+    MetaFakeSave {
+        date: String,
+        time: String,
+        image: String,
+    },
     MetaCorrupt(String),
     MetaDeleteLast,
     TitleEvolve(String),
-    Reach { storage: String, dur_ms: u32, scale: f32 },
+    Reach {
+        storage: String,
+        dur_ms: u32,
+        scale: f32,
+    },
     WindowFxShake(u32),
     WindowFxTitle(String),
     WindowFxTitleRestore,
     Shutdown(u32),
-    DesktopWrite { file: String, content: String },
+    DesktopWrite {
+        file: String,
+        content: String,
+    },
     DesktopOpen(String),
     End,
 }

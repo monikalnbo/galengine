@@ -51,7 +51,11 @@ pub fn eval(expr: &str, vars: &Vars) -> Result<Value, String> {
     Err(format!("无法求值：{e}"))
 }
 
-/// if 条件求值（指令已拆为 var / op / val）
+/// if 条件求值（指令已拆为 var / op / val）。
+///
+/// 两侧都按表达式求值：`if f.a + 1 > f.b * 2 *next` 可用。
+/// 唯一的历史特例：左操作数是「裸标识符且未赋值」时按 0（剧本可省初始化），
+/// 因为 `eval` 会把未赋值的裸词当字符串字面量。
 pub fn eval_cond(var: &str, op: &str, val: &str, vars: &Vars) -> Result<bool, String> {
     // 左操作数为「未赋值的变量名」（裸名或 f./sf. 前缀的标识符，查无值）→ 按 0
     // （裸名未赋值在 eval 里会被当作字符串字面量，这里显式纠正为数字 0）
@@ -61,7 +65,7 @@ pub fn eval_cond(var: &str, op: &str, val: &str, vars: &Vars) -> Result<bool, St
         && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.');
     let a = match vars.get(name) {
         Some(v) => v.clone(),
-        None if is_ident => Value::Int(0),
+        None if is_ident && name.parse::<f64>().is_err() => Value::Int(0),
         None => eval(var, vars)?,
     };
     let b = eval(val, vars)?;

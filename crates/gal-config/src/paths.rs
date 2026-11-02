@@ -37,4 +37,3 @@ fn first_exists(cands: &[String], fallback: &str) -> String {
         .cloned()
         .unwrap_or_else(|| fallback.to_string())
 }
-

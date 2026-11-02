@@ -47,7 +47,50 @@ fn set表达式与desktop内容含空格() {
 
 #[test]
 fn 未知指令中文报错() {
-    assert_eq!(cmd("foo", "").unwrap_err(), "t.ks:1：未知指令「foo」");
+    let e = cmd("foo", "").unwrap_err();
+    assert!(e.starts_with("t.ks:1：未知指令「foo」"), "{e}");
+    assert!(e.contains("已停止在上一句台词"), "{e}");
+}
+
+#[test]
+fn charsway与顶层shake() {
+    match cmd("charsway", "0 15 400").unwrap() {
+        Command::CharSway { layer, count, period_ms } => {
+            assert_eq!((layer, count, period_ms), (0, 15, 400));
+        }
+        _ => panic!(),
+    }
+    // 省略周期走默认 300ms
+    assert!(matches!(
+        cmd("charsway", "2 3").unwrap(),
+        Command::CharSway { layer: 2, count: 3, period_ms: 300 }
+    ));
+    assert!(cmd("charsway", "0 15 400 extra").is_err());
+    assert!(cmd("charsway", "3 5").is_err()); // 层越界
+    assert!(matches!(cmd("shake", "500").unwrap(), Command::WindowFxShake(500)));
+    assert!(cmd("shake", "").is_err());
+}
+
+#[test]
+fn cg_hide的ms参数不再被吞() {
+    // 回归：`cg hide 800` 曾被 [s] | [s, _] 臂吞成默认 700
+    assert!(matches!(
+        cmd("cg", "hide 800").unwrap(),
+        Command::Cg { ref storage, fade_ms: 800 } if storage == "hide"
+    ));
+    assert!(matches!(
+        cmd("cg", "hide").unwrap(),
+        Command::Cg { ref storage, fade_ms: 700 } if storage == "hide"
+    ));
+    assert!(matches!(cmd("cg", "a 1200").unwrap(), Command::Cg { fade_ms: 1200, .. }));
+}
+
+#[test]
+fn clear与end容忍多余参数() {
+    assert!(matches!(cmd("clear", "").unwrap(), Command::Clear));
+    assert!(matches!(cmd("clear", "all").unwrap(), Command::Clear));
+    assert!(matches!(cmd("end", "").unwrap(), Command::End));
+    assert!(matches!(cmd("end", "now").unwrap(), Command::End));
 }
 
 #[test]
@@ -75,4 +118,3 @@ fn 演示剧本start_ks全量解析通过() {
         }
     }
 }
-

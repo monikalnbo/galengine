@@ -52,6 +52,7 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
     );
     interp.positions = conf.sprites.positions.clone();
     interp.chibi = conf.sprites.chibi.iter().cloned().collect();
+    interp.char_fade_ms = conf.sprites.default_fade_ms;
     // 标题入口启动（不立即执行剧本；开始游戏/快读时才 start）
 
     let mut g = Game::new(conf, interp);
@@ -175,7 +176,15 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
             if gal_script::interp::dbg() {
                 eprintln!("[dbg t={:.2}] ended", g.now_ms);
             }
-            if autoclick_ms > 0.0 {
+            // 剧本错误（未知指令/参数）只提示不退出：停在当前句，玩家可继续或退出
+            if let Some(e) = g.interp.error.take() {
+                eprintln!("[剧本错误] {e}");
+                if autoclick_ms > 0.0 {
+                    break 'running; // 无头冒烟：报错即停，便于 CI 断言
+                }
+                g.msg(format!("剧本错误：{e}"));
+                g.interp.state = RunState::WaitClick;
+            } else if autoclick_ms > 0.0 {
                 break 'running;
             } else {
                 g.back_to_title();

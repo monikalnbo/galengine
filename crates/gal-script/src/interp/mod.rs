@@ -48,8 +48,12 @@ pub struct Interp {
     pub positions: HashMap<String, SpritePos>,
     /// Q版立绘名单（sprites.chibi 注入；在场时背景虚化）
     pub chibi: std::collections::HashSet<String>,
+    /// 立绘切换默认淡入淡出时长（game.yaml sprites.default_fade_ms 注入）
+    pub char_fade_ms: u32,
     /// 对白历史记录（回卷查阅用）
     pub backlog: Vec<BacklogItem>,
+    /// 最近一条剧本错误（未知指令/参数错误）：不中断游戏，由 UI 以 toast 提示
+    pub error: Option<String>,
 }
 
 impl Interp {
@@ -73,7 +77,9 @@ impl Interp {
             pending_text: None,
             positions: SpritesCfg::default().positions,
             chibi: std::collections::HashSet::new(),
+            char_fade_ms: SpritesCfg::default().default_fade_ms,
             backlog: Vec::new(),
+            error: None,
         }
     }
 
@@ -219,6 +225,15 @@ impl Interp {
     }
 
     fn run_until_wait(&mut self) -> Result<(), String> {
+        self.run_until_wait_inner().inspect_err(|e| {
+            // 剧本层的错误（未知指令/参数写法）不再让整局退出：
+            // 记录到 error 供 UI toast，并停在当前等待点，玩家可继续/存档退出。
+            self.error = Some(e.clone());
+            self.state = RunState::Ended;
+        })
+    }
+
+    fn run_until_wait_inner(&mut self) -> Result<(), String> {
         for _ in 0..MAX_STEPS {
             let lines = match self.scripts.get(&self.file) {
                 Some(l) => l,

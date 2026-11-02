@@ -36,7 +36,7 @@ impl Interp {
             Command::Char { layer, storage, x, y } => {
                 let next = if storage == "hide" { None } else { Some(resolve("char", &storage)) };
                 let l = &mut self.stage.chars[layer as usize];
-                l.set(next, 500);
+                l.set(next, self.char_fade_ms);
                 l.chibi = storage != "hide" && self.chibi.contains(storage.as_str());
                 if let (Some(ox), Some(oy)) = (x, y) {
                     l.offset = (ox, oy);
@@ -46,7 +46,7 @@ impl Interp {
             Command::CharPos { layer, storage, pos_name } => {
                 let next = if storage == "hide" { None } else { Some(resolve("char", &storage)) };
                 let l = &mut self.stage.chars[layer as usize];
-                l.set(next, 500);
+                l.set(next, self.char_fade_ms);
                 l.chibi = storage != "hide" && self.chibi.contains(storage.as_str());
                 // pos_name 形如 "far_left 0"：取首词查 positions（config 注入）
                 let key = pos_name.split_whitespace().next().unwrap_or("");
@@ -54,6 +54,11 @@ impl Interp {
                     return Err(format!("{ctx}：未知立绘预设位置「{key}」，请在 game.yaml 的 sprites.positions 配置"));
                 };
                 l.offset = (p.x, p.y);
+                Ok(false)
+            }
+            Command::CharSway { layer, count, period_ms } => {
+                // 纯表现，不阻塞剧本；与窗口抖动同属系统层演出
+                self.events.push(SysEvent::CharSway { layer, count, period_ms });
                 Ok(false)
             }
             Command::Cg { storage, fade_ms } => {

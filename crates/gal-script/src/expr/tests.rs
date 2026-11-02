@@ -54,6 +54,27 @@ fn 条件求值() {
 }
 
 #[test]
+fn 条件两侧支持表达式() {
+    let mut vars = v();
+    vars.set("f.b", Value::Int(3));
+    let vars = vars;
+    // 左值表达式
+    assert!(eval_cond("f.a + 1", "==", "3", &vars).unwrap());
+    assert!(eval_cond("f.a * 2", ">", "3", &vars).unwrap());
+    // 右值表达式
+    assert!(eval_cond("f.a", "<", "f.b + 1", &vars).unwrap());
+    // 两侧都是表达式
+    assert!(eval_cond("f.a + 1", "==", "f.b - 0", &vars).unwrap());
+    // 字符串表达式
+    assert!(eval_cond("sf.name + '天'", "==", "'夏天'", &vars).unwrap());
+    // 数字字面量左值仍按数字（不被当作未赋值标识符吞成 0）
+    assert!(!eval_cond("2", "==", "0", &vars).unwrap());
+    assert!(eval_cond("2", "==", "2", &vars).unwrap());
+    // 除零等表达式错误照常上抛
+    assert!(eval_cond("1 / 0", "==", "1", &vars).is_err());
+}
+
+#[test]
 fn 未赋值变量与数字比较按零() {
     let vars = v();
     // 未赋值（空串）vs 数字：按 0，不再报错（剧本可省初始化）

@@ -30,6 +30,7 @@ impl Game {
         );
         self.interp.positions = self.conf.sprites.positions.clone();
         self.interp.chibi = self.conf.sprites.chibi.iter().cloned().collect();
+        self.interp.char_fade_ms = self.conf.sprites.default_fade_ms;
         self.started = false;
         self.overlay = Overlay::Title { sel: 0 };
         self.auto = false;

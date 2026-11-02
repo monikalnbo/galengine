@@ -57,20 +57,65 @@ pub struct StageSnap {
     pub cg: Option<String>,
 }
 
+/// 立绘摇晃（`charsway 层 次数 周期`）：剩余时间 + 每周期时长。
+/// 只影响绘制偏移，不进存档快照（纯瞬时演出）。
+#[derive(Clone, Copy, Debug)]
+pub struct Sway {
+    pub left: f32,
+    pub period_ms: f32,
+}
+
 #[derive(Default)]
 pub struct Stage {
     pub bg: Layer,
     pub chars: [Layer; 3],
     pub cg: Layer,
+    /// 各立绘层当前的摇晃状态（`charsway` 触发，按周期轮换）
+    pub sway: [Option<Sway>; 3],
 }
 
 impl Stage {
+    /// 触发立绘摇晃：count 次、每周期 period_ms
+    pub fn start_sway(&mut self, layer: usize, count: u32, period_ms: u32) {
+        if let Some(s) = self.sway.get_mut(layer) {
+            *s = Some(Sway {
+                left: count as f32 * period_ms.max(1) as f32,
+                period_ms: period_ms.max(1) as f32,
+            });
+        }
+    }
+
+    /// 当前立绘摇晃偏移（未摇晃=0）
+    pub fn sway_offset(&self, layer: usize) -> i32 {
+        match self.sway.get(layer) {
+            Some(Some(s)) if s.left > 0.0 => {
+                // 每半个周期换向；幅度固定（次数由 start_sway 换算成总时长）
+                let half = (s.period_ms / 2.0).max(1.0);
+                let dir = if ((s.left / half) as u32).is_multiple_of(2) { -1.0 } else { 1.0 };
+                (dir * 12.0) as i32
+            }
+            _ => 0,
+        }
+    }
+
+    fn tick_sway(&mut self, dt_ms: f32) {
+        for slot in self.sway.iter_mut() {
+            if let Some(s) = slot {
+                s.left = (s.left - dt_ms).max(0.0);
+                if s.left <= 0.0 {
+                    *slot = None;
+                }
+            }
+        }
+    }
+
     pub fn tick(&mut self, dt_ms: f32) {
         self.bg.tick(dt_ms);
         for c in &mut self.chars {
             c.tick(dt_ms);
         }
         self.cg.tick(dt_ms);
+        self.tick_sway(dt_ms);
     }
 
     /// 存档快照

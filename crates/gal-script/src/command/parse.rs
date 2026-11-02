@@ -74,14 +74,31 @@ impl Command {
                 }
                 _ => err("char 用法：char 层(0-2) 素材|hide [x y | 位置名]"),
             },
+            "charsway" => match tokens.as_slice() {
+                [l, n] => Ok(Command::CharSway {
+                    layer: layer_of(l, ctx)?,
+                    count: num(n)?,
+                    period_ms: 300,
+                }),
+                [l, n, ms] => Ok(Command::CharSway {
+                    layer: layer_of(l, ctx)?,
+                    count: num(n)?,
+                    period_ms: num(ms)?,
+                }),
+                _ => err("charsway 用法：charsway 层(0-2) 次数 [周期ms]"),
+            },
             "cg" => match tokens.as_slice() {
-                [s, ms] if s != &"hide" => {
+                // `cg hide [ms]`：隐藏并（可选）以指定时长淡出；此前该分支漏判，
+                // 导致 `cg hide 800` 被吞成默认 700ms。
+                [s] if s == &"hide" => Ok(Command::Cg { storage: s.to_string(), fade_ms: 700 }),
+                [s, ms] if s == &"hide" => {
                     Ok(Command::Cg { storage: s.to_string(), fade_ms: num(ms)? })
                 }
-                [s] | [s, _] => Ok(Command::Cg { storage: s.to_string(), fade_ms: 700 }),
+                [s] => Ok(Command::Cg { storage: s.to_string(), fade_ms: 700 }),
+                [s, ms] => Ok(Command::Cg { storage: s.to_string(), fade_ms: num(ms)? }),
                 _ => err("cg 用法：cg 素材 [淡入ms] / cg hide [ms]"),
             },
-            "clear" if tokens.is_empty() => Ok(Command::Clear),
+            "clear" => Ok(Command::Clear),
             "wait" => match tokens.as_slice() {
                 [ms] => Ok(Command::Wait(num(ms)?)),
                 _ => err("wait 用法：wait 毫秒"),
@@ -183,6 +200,13 @@ impl Command {
                 }),
                 _ => err("reach 用法：reach 素材 [ms] [倍率] / reach hide"),
             },
+            // 顶层 `shake ms`：与 `window_fx shake ms` 同义的短写（演示剧本与 KAG 迁移稿常见）
+            "shake" => match tokens.as_slice() {
+                [ms] => Ok(Command::WindowFxShake(num(ms)?)),
+                // `shake 幅度 毫秒`（KAG3 迁移稿常见）：幅度当前固定，取时长
+                [_amp, ms] => Ok(Command::WindowFxShake(num(ms)?)),
+                _ => err("shake 用法：shake 毫秒 / shake 幅度 毫秒"),
+            },
             "window_fx" => match tokens.as_slice() {
                 ["shake", ms] => Ok(Command::WindowFxShake(num(ms)?)),
                 ["title", "restore"] => Ok(Command::WindowFxTitleRestore),
@@ -210,10 +234,19 @@ impl Command {
                 [f] => Ok(Command::DesktopOpen(f.to_string())),
                 _ => err("desktop_open 用法：desktop_open 文件"),
             },
-            "end" if tokens.is_empty() => Ok(Command::End),
-            other => Err(format!("{ctx}：未知指令「{other}」")),
+            "end" => Ok(Command::End),
+            // 未命中指令统一由解释器以「中文错误 + 文件:行号」上报并停在剧本文本处，
+            // 不再让整局直接退出（见 interp::run_until_wait 的 Err 兜底）。
+            other => Err(format!(
+                "{ctx}：未知指令「{other}」（已停止在上一句台词；请检查拼写或升级引擎）"
+            )),
         }
     }
+}
+
+/// 立绘层号（0-2），越界给出带行号的中文错误
+fn layer_of(l: &str, ctx: &str) -> Result<u8, String> {
+    l.parse::<u8>().ok().filter(|n| *n < 3).ok_or(format!("{ctx}：立绘层必须是 0-2"))
 }
 
 fn jump(file: Option<String>, target: &str) -> Command {
