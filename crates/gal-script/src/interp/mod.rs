@@ -18,7 +18,7 @@ use crate::command::Command;
 use crate::lexer::{self, Line, LineKind};
 use crate::stage::{Stage, StageSnap};
 use crate::vars::{Value, Vars};
-use blocks::{Blocks, ElseTargets};
+use blocks::{Blocks, ElsIfChains, ElseTargets};
 use gal_config as config;
 use gal_config::sprites::{SpritePos, SpritesCfg};
 use gal_text::writer::{ClickResult, Typewriter};
@@ -35,6 +35,10 @@ pub struct Interp {
     pub(crate) blocks: HashMap<String, Blocks>,
     /// else 行 → endif 行（按文件）
     pub(crate) else_targets: HashMap<String, ElseTargets>,
+    /// v0.3.4 if 行下标 → elsif 链（文件名 → 表）
+    pub(crate) elsif_chains: HashMap<String, ElsIfChains>,
+    /// v0.3.4 已命中分支的 if 行栈（elsif/else 靠它识别「跳过我」；endif 弹栈）
+    pub(crate) branch_taken: Vec<usize>,
     /// call 调用栈：(文件, 返回位置)。只存运行期，不进存档
     pub(crate) call_stack: Vec<(String, usize)>,
     pub(crate) file: String,
@@ -81,6 +85,8 @@ impl Interp {
             labels: HashMap::new(),
             blocks: HashMap::new(),
             else_targets: HashMap::new(),
+            elsif_chains: HashMap::new(),
+            branch_taken: Vec::new(),
             call_stack: Vec::new(),
             file: String::new(),
             pc: 0,
@@ -147,7 +153,8 @@ impl Interp {
         let src = src.trim_start_matches('\u{feff}'); // 剥 BOM
         let lines = lexer::parse_script(src).map_err(|e| format!("{file}：{e}"))?;
         // if/else/endif 配对在加载时一次算好，执行期只查表
-        let (blocks, else_targets) = blocks::pair(&lines).map_err(|e| format!("{file}：{e}"))?;
+        let (blocks, else_targets, chains) =
+            blocks::pair(&lines).map_err(|e| format!("{file}：{e}"))?;
         for (i, line) in lines.iter().enumerate() {
             if let LineKind::Label(label) = &line.kind {
                 self.labels.insert((file.to_string(), label.clone()), i);
@@ -155,6 +162,7 @@ impl Interp {
         }
         self.blocks.insert(file.to_string(), blocks);
         self.else_targets.insert(file.to_string(), else_targets);
+        self.elsif_chains.insert(file.to_string(), chains);
         self.scripts.insert(file.to_string(), lines);
         Ok(())
     }

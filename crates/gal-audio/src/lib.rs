@@ -12,7 +12,7 @@
 //! bgm fadeout ms = fadeoutbgm、se 名称 = playse 无 buffer 号）。
 
 mod core;
-mod log;
+pub mod log;
 
 use std::collections::HashMap;
 use std::time::Duration;

@@ -263,8 +263,18 @@ impl Command {
                 _ if !tokens.is_empty() => Ok(Command::IfBlock { cond: rest.trim().to_string() }),
                 _ => err("if 用法：if 条件 *label / if 条件 … endif"),
             },
+            // v0.3.4 块中段：`elsif 条件`（KAG3 elsif）
+            "elsif" if !tokens.is_empty() => Ok(Command::ElsIf { cond: rest.trim().to_string() }),
             "else" if tokens.is_empty() => Ok(Command::Else),
             "endif" if tokens.is_empty() => Ok(Command::EndIf),
+            // v0.3.4 表达式族：emb（嵌入台词）/ eval（纯求值可含赋值）/ trace（日志）
+            "emb" if !rest.trim().is_empty() => Ok(Command::Emb { expr: rest.trim().to_string() }),
+            "eval" if !rest.trim().is_empty() => {
+                Ok(Command::Eval { expr: rest.trim().to_string() })
+            }
+            "trace" if !rest.trim().is_empty() => {
+                Ok(Command::Trace { text: rest.trim().to_string() })
+            }
             "call" => match tokens.as_slice() {
                 [t] => Ok(call(None, t)),
                 [f, t] => Ok(call(Some(f.to_string()), t)),

@@ -3,8 +3,64 @@
 use super::types::{AudioWait, InputSpec, RunState, SysEvent};
 use super::Interp;
 use crate::command::Command;
-use crate::vars::Value;
+use crate::vars::{Value, Vars};
 use gal_config::paths::resolve;
+
+/// v0.3.4 值 → 台词/日志文本（emb 输出口径：Int/Float 数字、Str 原样、
+/// 容器紧凑序列化 [a, b] / %[ k: v ]）
+fn value_to_text(v: &Value) -> String {
+    match v {
+        Value::Str(s) => s.clone(),
+        Value::Int(n) => n.to_string(),
+        Value::Float(f) => {
+            if f.fract() == 0.0 {
+                format!("{f:.1}")
+            } else {
+                format!("{f}")
+            }
+        }
+        Value::Arr(a) => {
+            let items: Vec<String> = a.iter().map(value_to_text).collect();
+            format!("[{}]", items.join(", "))
+        }
+        Value::Dict(d) => {
+            let items: Vec<String> =
+                d.iter().map(|(k, v)| format!("{}: {}", k, value_to_text(v))).collect();
+            format!("%[{}]", items.join(", "))
+        }
+    }
+}
+
+/// v0.3.4 trace 的 `%表达式` 字段：从 tail 起求值到第一个分隔符（空白/逗号/
+/// 中文标点/行尾）；求值失败返回 None（调用方按原样保留 `%`）。
+/// 返回 (渲染文本, 消耗的字符数)
+fn eval_trace_field(tail: &str, vars: &Vars) -> Option<(String, usize)> {
+    // 找表达式终点：括号配平后遇到分隔符
+    let (mut depth, mut end) = (0i32, tail.len());
+    for (i, c) in tail.char_indices() {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => {
+                if depth == 0 {
+                    end = i;
+                    break;
+                }
+                depth -= 1;
+            }
+            ' ' | ',' | '，' | '。' | '、' | '\t' if depth == 0 => {
+                end = i;
+                break;
+            }
+            _ => {}
+        }
+    }
+    if end == 0 {
+        return None;
+    }
+    let expr = &tail[..end];
+    let v = crate::expr::eval(expr, vars).ok()?;
+    Some((value_to_text(&v), end))
+}
 
 /// 自由层素材路径：先按 bg/cg 图库解析，找不到再用数据目录直取。
 fn resolve_layer(_n: u8, storage: &str) -> String {
@@ -281,28 +337,110 @@ impl Interp {
                 let hit = crate::expr::eval(&cond, &self.vars)
                     .map(|v| crate::expr::truthy(&v))
                     .map_err(|e| format!("{ctx}：if 条件错误：{e}"))?;
-                if !hit {
-                    // 假分支：进入 else 分支首行；没有 else 则跳到 endif 之后
-                    let (else_at, end) = self
-                        .blocks_of(&self.file)
-                        .and_then(|b| b.get(&(self.pc - 1)).copied())
+                let if_at = self.pc - 1;
+                if hit {
+                    // v0.3.4 压栈标记「本链已命中」：后续 elsif/else 走到即跳过
+                    self.branch_taken.push(if_at);
+                } else {
+                    // 假分支：沿 elsif 链找下一分支，否则 else/endif 之后
+                    self.pc = self
+                        .next_branch_of(&self.file, if_at, if_at)
                         .ok_or_else(|| format!("{ctx}：if 块配对表缺失（疑似剧本热更新）"))?;
-                    self.pc = match else_at {
-                        Some(e) => e + 1,
-                        None => end + 1,
-                    };
                 }
                 Ok(false)
             }
-            Command::Else => {
-                // 能走到 else 说明真分支已执行完：跳过剩余分支
-                let end = self
-                    .else_target_of(&self.file, self.pc - 1)
-                    .ok_or_else(|| format!("{ctx}：else 配对表缺失"))?;
-                self.pc = end + 1;
+            Command::ElsIf { cond } => {
+                let elsif_at = self.pc - 1;
+                let if_at = self
+                    .if_owner_of_branch(&self.file, elsif_at)
+                    .ok_or_else(|| format!("{ctx}：elsif 配对表缺失"))?;
+                // 前面已有命中分支落到这里（fall-through）：整段跳过，不弹栈
+                if self.branch_taken.last() == Some(&if_at) {
+                    let (_, end) = *self
+                        .blocks_of(&self.file)
+                        .and_then(|b| b.get(&if_at))
+                        .ok_or_else(|| format!("{ctx}：if 块配对表缺失"))?;
+                    self.pc = end + 1;
+                    return Ok(false);
+                }
+                let hit = crate::expr::eval(&cond, &self.vars)
+                    .map(|v| crate::expr::truthy(&v))
+                    .map_err(|e| format!("{ctx}：elsif 条件错误：{e}"))?;
+                if hit {
+                    self.branch_taken.push(if_at);
+                } else {
+                    self.pc = self
+                        .next_branch_of(&self.file, if_at, elsif_at)
+                        .ok_or_else(|| format!("{ctx}：if 块配对表缺失"))?;
+                }
                 Ok(false)
             }
-            Command::EndIf => Ok(false),
+            Command::Emb { expr } => {
+                // KAG3 emb：求值结果拼进当前台词（无台词 = 单独一行显示）
+                let v = crate::expr::eval(&expr.clone(), &self.vars)
+                    .map_err(|e| format!("{ctx}：emb 求值失败：{e}"))?;
+                let piece = value_to_text(&v);
+                match self.pending_text.take() {
+                    Some(t) => self.pending_text = Some(t + &piece),
+                    None => self.pending_text = Some(piece),
+                }
+                Ok(false)
+            }
+            Command::Eval { expr } => {
+                crate::expr::eval_assign(&expr.clone(), &mut self.vars)
+                    .map_err(|e| format!("{ctx}：eval 失败：{e}"))?;
+                Ok(false)
+            }
+            Command::Trace { text } => {
+                // 静默失败留证通道：支持 %表达式 内联求值（求不出按原样保留）
+                let mut out = String::new();
+                let mut rest = text.as_str();
+                while let Some(p) = rest.find('%') {
+                    out.push_str(&rest[..p]);
+                    let tail = &rest[p + 1..];
+                    match eval_trace_field(tail, &self.vars) {
+                        Some((rendered, used)) => {
+                            out.push_str(&rendered);
+                            rest = &tail[used..];
+                        }
+                        None => {
+                            out.push('%');
+                            rest = tail;
+                        }
+                    }
+                }
+                out.push_str(rest);
+                gal_audio::log::log(
+                    gal_audio::log::Level::Info,
+                    "script",
+                    &format!("[trace] {out}"),
+                );
+                Ok(false)
+            }
+            Command::Else => {
+                let else_at = self.pc - 1;
+                // 有命中分支标记时是「真分支走完跳过」；无标记 = elsif 全假落 else，照常进
+                if let Some(if_at) = self.if_owner_of_branch(&self.file, else_at) {
+                    if self.branch_taken.last() == Some(&if_at) {
+                        let end = self
+                            .else_target_of(&self.file, else_at)
+                            .ok_or_else(|| format!("{ctx}：else 配对表缺失"))?;
+                        self.pc = end + 1;
+                        return Ok(false);
+                    }
+                }
+                Ok(false)
+            }
+            Command::EndIf => {
+                // 弹掉本块命中分支的标记（嵌套内层先弹）
+                let end_at = self.pc - 1;
+                if let Some(if_at) = self.if_owner_of_end(&self.file, end_at) {
+                    if self.branch_taken.last() == Some(&if_at) {
+                        self.branch_taken.pop();
+                    }
+                }
+                Ok(false)
+            }
             Command::Call { file, label } => {
                 if self.call_stack.len() >= super::MAX_CALL_DEPTH {
                     return Err(format!(

@@ -6,6 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+gal-audio.workspace = true
 gal-config.workspace = true
 gal-text.workspace = true
 serde.workspace = true

@@ -10,6 +10,10 @@ pub enum Value {
     Int(i64),
     Float(f64),
     Str(String),
+    /// v0.3.4：数组字面量（TJS `[1, 2, 3]`）；不落旧存档结构（新档可序列化）
+    Arr(Vec<Value>),
+    /// v0.3.4：字典字面量（TJS `%[ "k": v ]`）；保持插入序
+    Dict(Vec<(String, Value)>),
 }
 
 impl Value {
@@ -18,6 +22,7 @@ impl Value {
             Value::Int(i) => *i,
             Value::Float(f) => *f as i64,
             Value::Str(s) => s.parse().unwrap_or(0),
+            _ => 0,
         }
     }
     pub fn as_f64(&self) -> f64 {
@@ -25,6 +30,7 @@ impl Value {
             Value::Int(i) => *i as f64,
             Value::Float(f) => *f,
             Value::Str(s) => s.parse().unwrap_or(0.0),
+            _ => 0.0,
         }
     }
     pub fn as_str(&self) -> String {
@@ -32,6 +38,8 @@ impl Value {
             Value::Int(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
             Value::Str(s) => s.clone(),
+            Value::Arr(_) => "[]".into(),
+            Value::Dict(_) => "%[]".into(),
         }
     }
 }

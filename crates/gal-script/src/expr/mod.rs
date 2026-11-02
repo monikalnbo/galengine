@@ -25,6 +25,173 @@ pub fn eval(expr: &str, vars: &Vars) -> Result<Value, String> {
     node.eval(vars)
 }
 
+/// v0.3.4 求值并写回赋值目标：`f.a = 表达式` / `f.a += 1` / `sf.arr[0] = x` /
+/// `f.d.k = v`（KAG3 eval 主体形态）。返回求值结果。
+///
+/// 解析策略：按最顶层 `=` / `+= -= *= /= %=` 切分（不在括号/下标内的第一个），
+/// 左侧是赋值目标（变量名 / 下标 / 成员路径），右侧是普通表达式。
+pub fn eval_assign(expr: &str, vars: &mut Vars) -> Result<Value, String> {
+    let e = expr.trim();
+    if e.is_empty() {
+        return Err("表达式为空".into());
+    }
+    // 找顶层赋值运算符（深度 0：括号/方括号外）
+    let bytes = e.as_bytes();
+    let (mut depth, mut hit) = (0i32, None);
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'(' | b'[' => depth += 1,
+            b')' | b']' => depth -= 1,
+            b'=' if depth == 0 => {
+                // 跳过 == 以及 += -= *= /= %= 的 =（记录复合运算符）
+                let prev = if i > 0 { bytes[i - 1] } else { 0 };
+                let next = bytes.get(i + 1).copied().unwrap_or(0);
+                if next == b'=' {
+                    i += 2; // ==
+                    continue;
+                }
+                hit = Some((i, prev));
+                break; // 最左顶层 =（左结合唯一目标）
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    let Some((at, prev)) = hit else {
+        return eval(e, vars); // 无赋值：纯表达式求值
+    };
+    let (compound, target) = match prev {
+        b'+' | b'-' | b'*' | b'/' | b'%' => {
+            let op = (prev as char).to_string();
+            (Some(op), e[..at - 1].trim())
+        }
+        _ => (None, e[..at].trim()),
+    };
+    if target.is_empty() {
+        return Err(format!("赋值缺少左侧变量：{e}"));
+    }
+    let rhs_src = e[at + 1..].trim();
+    if rhs_src.is_empty() {
+        return Err(format!("赋值缺少右侧表达式：{e}"));
+    }
+    let rhs = eval(rhs_src, vars)?;
+    let value = match compound {
+        Some(op) => {
+            let cur = eval(target, vars).unwrap_or(Value::Int(0));
+            bin(&cur, &op, &rhs)?
+        }
+        None => rhs,
+    };
+    assign_to(target, value.clone(), vars)?;
+    Ok(value)
+}
+
+/// 把值写进赋值目标：`f.x` / `sf.x`（整变量）或带下标/成员的容器内定位。
+fn assign_to(target: &str, v: Value, vars: &mut Vars) -> Result<(), String> {
+    // 目标最后一段的宿主必须是变量：f.a[i]、f.d.k、sf.arr[0].sub
+    let (host_src, last) = split_last_accessor(target);
+    // last 两种：Index(expr) / Member(key)
+    let get_host = |vars: &Vars| -> Result<Value, String> {
+        if host_src.is_empty() {
+            Err(format!("赋值目标缺少变量名：{target}"))
+        } else {
+            eval(&host_src, vars)
+        }
+    };
+    match last {
+        None => {
+            // 纯变量名（f.x / sf.x / x）
+            if !target.contains('[') && !target.contains('.') {
+                vars.set(target, v);
+                return Ok(());
+            }
+            // eval 需要只读 vars，这里没有未赋值裸词场景：直接覆盖变量名
+            vars.set(target, v);
+            Ok(())
+        }
+        Some(Access::Index(idx_expr)) => {
+            let mut host = get_host(vars)?;
+            let idx = eval(&idx_expr, vars)?;
+            let n = idx.as_i64();
+            match &mut host {
+                Value::Arr(a) => {
+                    let i = n.unsigned_abs() as usize;
+                    if i >= a.len() {
+                        return Err(format!("数组下标越界：{target}[{n}]（长度 {}）", a.len()));
+                    }
+                    a[i] = v;
+                }
+                Value::Dict(d) => {
+                    let Value::Str(k) = idx.clone() else {
+                        return Err(format!("字典下标必须是字符串：{target}"));
+                    };
+                    upsert(d, k, v);
+                }
+                _ => return Err(format!("赋值目标不是容器：{target}")),
+            }
+            write_back(&host_src, host, vars, target)
+        }
+        Some(Access::Member(key)) => {
+            let mut host = get_host(vars)?;
+            match &mut host {
+                Value::Dict(d) => upsert(d, key.to_string(), v),
+                _ => return Err(format!("赋值目标不是字典：{target}")),
+            }
+            write_back(&host_src, host, vars, target)
+        }
+    }
+}
+
+enum Access {
+    Index(String),
+    Member(String),
+}
+
+/// 拆出最后一个访问器：`f.arr[0]` → ("f.arr", Index("0"))；`f.d.k` → ("f.d", Member("k"))；
+/// `f.x` → ("f.x", None)
+fn split_last_accessor(target: &str) -> (String, Option<Access>) {
+    let t = target.trim();
+    if t.ends_with(']') {
+        if let Some(open) = t.rfind('[') {
+            return (
+                t[..open].trim().to_string(),
+                Some(Access::Index(t[open + 1..t.len() - 1].trim().to_string())),
+            );
+        }
+    }
+    // 成员点段：f./sf. 前缀的两段是变量名，只拆第三段起的最后一段
+    let segs: Vec<&str> = t.split('.').collect();
+    if segs.len() >= 3 && (segs[0] == "f" || segs[0] == "sf") {
+        let var = format!("{}.{}", segs[0], segs[1]);
+        let host = segs[2..segs.len() - 1].iter().fold(var, |acc, s| format!("{acc}.{s}"));
+        return (host, Some(Access::Member(segs[segs.len() - 1].to_string())));
+    }
+    (t.to_string(), None)
+}
+
+/// 宿主写回：host_src 是变量名时直接 set（容器已就地修改的副本重新写入）
+fn write_back(host_src: &str, host: Value, vars: &mut Vars, target: &str) -> Result<(), String> {
+    // host_src 必须是纯变量名（f.x / sf.x）；嵌套宿主（f.d.k[0]）暂不支持再嵌套写回
+    let name = host_src.trim();
+    let ok = !name.contains('[')
+        && name.split('.').count() <= 2
+        && (name.split('.').count() == 1 || name.starts_with("f.") || name.starts_with("sf."));
+    if !ok {
+        return Err(format!("赋值目标嵌套过深（暂不支持）：{target}"));
+    }
+    vars.set(name, host);
+    Ok(())
+}
+
+fn upsert(d: &mut Vec<(String, Value)>, k: String, v: Value) {
+    if let Some(slot) = d.iter_mut().find(|(dk, _)| *dk == k) {
+        slot.1 = v;
+    } else {
+        d.push((k, v));
+    }
+}
+
 /// if 条件求值（指令已拆为 var / op / val）。
 ///
 /// 两侧都按表达式求值：`if f.a + 1 > f.b * 2 *next` 可用。
@@ -88,6 +255,9 @@ pub fn truthy(v: &Value) -> bool {
         Value::Str(s) => !s.is_empty(),
         Value::Int(i) => *i != 0,
         Value::Float(f) => *f != 0.0,
+        // 容器：空 = 假
+        Value::Arr(a) => !a.is_empty(),
+        Value::Dict(d) => !d.is_empty(),
     }
 }
 
@@ -175,6 +345,12 @@ fn lex(s: &str) -> Result<Vec<Tok>, String> {
             continue;
         }
         let one = match c {
+            '[' => Some("["),
+            ']' => Some("]"),
+            ',' => Some(","),
+            ':' => Some(":"),
+            '?' => Some("?"),
+            '=' => Some("="),
             '+' => Some("+"),
             '-' => Some("-"),
             '*' => Some("*"),
@@ -206,6 +382,17 @@ enum Node {
     Ident(String),
     Un(&'static str, Box<Node>),
     Bin(&'static str, Box<Node>, Box<Node>),
+    /// v0.3.4 三元：cond ? a : b
+    Ter(Box<Node>, Box<Node>, Box<Node>),
+    /// v0.3.4 数组/字典下标：base[idx]（字典可用字符串下标）
+    Index(Box<Node>, Box<Node>),
+    /// v0.3.4 成员访问：base.key / base["k"]（字典；数组用 .length）
+    Member(Box<Node>, String),
+    /// v0.3.4 数组/字典字面量（TJS `[a, b]` / `%[ k: v ]`）；
+    /// 布尔 = 是否字典（空字面量 `[]` vs `%[]` 也靠它区分）
+    Lit(Vec<Node>, bool),
+    /// v0.3.4 字典键值对（Lit 内部：key 必须 literal）
+    Pair(Box<Node>, Box<Node>),
 }
 
 impl Node {
@@ -260,6 +447,71 @@ impl Node {
                     bin(&x, op, &y)
                 }
             },
+            Node::Ter(c, a, b) => {
+                if truthy(&c.eval(vars)?) {
+                    a.eval(vars)
+                } else {
+                    b.eval(vars)
+                }
+            }
+            Node::Index(base, idx) => {
+                let b = base.eval(vars)?;
+                let i = idx.eval(vars)?;
+                match (b, i) {
+                    (Value::Arr(a), i) => {
+                        let n = i.as_i64();
+                        a.get(n.unsigned_abs() as usize)
+                            .cloned()
+                            .ok_or_else(|| format!("数组下标越界：[{n}]（长度 {}）", a.len()))
+                    }
+                    (Value::Dict(d), Value::Str(k)) => d
+                        .iter()
+                        .find(|(dk, _)| *dk == k)
+                        .map(|(_, v)| v.clone())
+                        .ok_or_else(|| format!("字典无键：「{k}」")),
+                    (Value::Dict(_), i) => Err(format!("字典下标必须是字符串：{i:?}")),
+                    (b, _) => Err(format!("该类型不支持下标访问：{b:?}")),
+                }
+            }
+            Node::Member(base, key) => {
+                let b = base.eval(vars)?;
+                match b {
+                    Value::Dict(d) => d
+                        .iter()
+                        .find(|(dk, _)| dk == key)
+                        .map(|(_, v)| v.clone())
+                        .ok_or_else(|| format!("字典无成员：「{key}」")),
+                    Value::Arr(_) if key == "length" => {
+                        Ok(Value::Int(if let Value::Arr(a) = b { a.len() as i64 } else { 0 }))
+                    }
+                    _ => Err(format!("该类型不支持成员访问 .{key}")),
+                }
+            }
+            Node::Lit(items, dict) => {
+                if *dict {
+                    let mut d = Vec::new();
+                    for it in items {
+                        if let Node::Pair(k, v) = it {
+                            let kv = k.eval(vars)?;
+                            let Value::Str(key) = kv else {
+                                return Err(format!("字典键必须是字符串：{kv:?}"));
+                            };
+                            d.push((key, v.eval(vars)?));
+                        }
+                    }
+                    Ok(Value::Dict(d))
+                } else {
+                    let mut a = Vec::new();
+                    for it in items {
+                        a.push(it.eval(vars)?);
+                    }
+                    Ok(Value::Arr(a))
+                }
+            }
+            Node::Pair(k, v) => {
+                let _ = (k, v);
+                Err("键值对只能出现在字典字面量里".into())
+            }
         }
     }
 }
@@ -311,6 +563,8 @@ fn is_blank(v: &Value) -> bool {
         Value::Str(s) => s.is_empty(),
         Value::Int(i) => *i == 0,
         Value::Float(f) => *f == 0.0,
+        Value::Arr(a) => a.is_empty(),
+        Value::Dict(d) => d.is_empty(),
     }
 }
 
@@ -334,9 +588,17 @@ impl Parser<'_> {
         false
     }
 
-    /// `||`（最低）
+    /// `||`（最低）；其上挂三元 `?:`（右结合）
     fn parse_or(&mut self) -> Result<Node, String> {
-        let mut n = self.parse_nullco()?;
+        let n = self.parse_nullco()?;
+        if self.eat("?") {
+            let a = self.parse_or()?;
+            if !self.eat(":") {
+                return Err("三元运算符缺少冒号：cond ? a : b".into());
+            }
+            return Ok(Node::Ter(Box::new(n), Box::new(a), Box::new(self.parse_or()?)));
+        }
+        let mut n = n;
         while self.eat("||") {
             n = Node::Bin("||", Box::new(n), Box::new(self.parse_nullco()?));
         }
@@ -403,6 +665,14 @@ impl Parser<'_> {
                 return Ok(Node::Un(o, Box::new(self.parse_unary()?)));
             }
         }
+        // v0.3.4 字典字面量 %[ k: v, ... ]（% 与 [ 两个 token）
+        if matches!(self.peek(), Some(Tok::Op("%")))
+            && matches!(self.toks.get(self.i + 1), Some(Tok::Op("[")))
+        {
+            self.i += 2;
+            let lit = self.parse_composite(true)?;
+            return self.parse_postfix(lit);
+        }
         self.parse_primary()
     }
 
@@ -411,17 +681,99 @@ impl Parser<'_> {
             return Err("表达式意外结束".into());
         };
         self.i += 1;
-        match tok {
-            Tok::Val(v) => Ok(Node::Val(v)),
-            Tok::Ident(name) => Ok(Node::Ident(name)),
+        let base = match tok {
+            Tok::Val(v) => Node::Val(v),
+            Tok::Ident(name) => return self.parse_ident_path(name),
             Tok::Op("(") => {
                 let n = self.parse_or()?;
                 if !self.eat(")") {
                     return Err("括号未闭合".into());
                 }
-                Ok(n)
+                n
             }
-            Tok::Op(op) => Err(format!("此处不能出现运算符「{op}」")),
+            // v0.3.4 数组字面量 [a, b, c]（可接下标后缀）
+            Tok::Op("[") => self.parse_composite(false)?,
+            Tok::Op(op) => return Err(format!("此处不能出现运算符「{op}」")),
+        };
+        self.parse_postfix(base)
+    }
+
+    /// v0.3.4 数组/字典字面量：`[a, b, c]` / `%[ k: v, ... ]`（入口见 parse_unary
+    /// 前对 `%[` 的特判，字典元素必须 `key : value`）
+    fn parse_composite(&mut self, dict: bool) -> Result<Node, String> {
+        let mut items = Vec::new();
+        if self.eat("]") {
+            return Ok(Node::Lit(items, dict));
         }
+        loop {
+            let k = self.parse_nullco()?;
+            if self.eat(":") {
+                if !dict {
+                    return Err("数组字面量里不能出现冒号（字典字面量请用 %[ ... ]）".into());
+                }
+                // TJS 惯例：键是裸标识符时按字符串字面量（裸词本可解析成变量）
+                let k = match k {
+                    Node::Ident(n) => Node::Val(Value::Str(n)),
+                    k => k,
+                };
+                let v = self.parse_nullco()?;
+                items.push(Node::Pair(Box::new(k), Box::new(v)));
+            } else if dict {
+                return Err("字典字面量元素必须是 key: value".into());
+            } else {
+                items.push(k);
+            }
+            if self.eat(",") {
+                continue;
+            }
+            if self.eat("]") {
+                break;
+            }
+            return Err("数组/字典字面量应以 , 或 ] 分隔".into());
+        }
+        Ok(Node::Lit(items, dict))
+    }
+
+    /// v0.3.4 后缀链：base[i]（下标；成员 base.key 在 lexer 已并入 Ident，
+    /// f.a.b 形态在 parse_ident_path 拆）
+    fn parse_postfix(&mut self, base: Node) -> Result<Node, String> {
+        let mut base = base;
+        loop {
+            if self.eat("[") {
+                let idx = self.parse_or()?;
+                if !self.eat("]") {
+                    return Err("下标括号未闭合".into());
+                }
+                base = Node::Index(Box::new(base), Box::new(idx));
+                continue;
+            }
+            break;
+        }
+        Ok(base)
+    }
+
+    /// v0.3.4 标识符路径：`f.party.hp` / `sf.cfg.x`——f./sf. 前缀与首段合起来
+    /// 是变量名（Vars::get 原生认它），其余点段逐级转 Member
+    fn parse_ident_path(&mut self, name: String) -> Result<Node, String> {
+        if name == "true" {
+            return self.parse_postfix(Node::Val(Value::Int(1)));
+        }
+        if name == "false" {
+            return self.parse_postfix(Node::Val(Value::Int(0)));
+        }
+        let segs: Vec<&str> = name.split('.').collect();
+        // f.a / sf.x：前两段是变量名；其余点段是成员
+        let (var, rest) = match segs.split_first() {
+            Some((first, rest)) if *first == "f" || *first == "sf" => match rest.split_first() {
+                Some((second, tail)) => (format!("{first}.{second}"), tail),
+                None => (name.clone(), [].as_slice()),
+            },
+            _ => (segs[0].to_string(), &segs[1..]),
+        };
+        let mut node = Node::Ident(var);
+        for k in rest {
+            node = Node::Member(Box::new(node), (*k).to_string());
+        }
+        self.parse_postfix(node)
     }
 }

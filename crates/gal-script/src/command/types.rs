@@ -159,10 +159,28 @@ pub enum Command {
     IfBlock {
         cond: String,
     },
+    /// v0.3.4 块中段 `elsif 条件`：前置分支全假时求值本条件；
+    /// 假则跳到下一个 elsif/else 之后或 endif 之后（blocks 表解析）
+    ElsIf {
+        cond: String,
+    },
     /// 块中段 `else`：真分支执行到这里直接跳到 endif 之后
     Else,
     /// 块结束 `endif`：无操作（占位，保证 if/else 目标可计算）
     EndIf,
+    /// v0.3.4 `emb 表达式`：求值结果嵌入当前台词（KAG3 emb）
+    Emb {
+        expr: String,
+    },
+    /// v0.3.4 `eval 表达式`：求值（可含赋值 `f.a = 5`）不产生输出（KAG3 eval）
+    Eval {
+        expr: String,
+    },
+    /// v0.3.4 `trace 文本`：调试输出落 engine.log（KAG3 trace / krkr 控制台）；
+    /// 支持 `%表达式` 占位（求值内联）
+    Trace {
+        text: String,
+    },
     /// 调用子程序：压栈后跳转，`return` 回到下一行
     Call {
         file: Option<String>,

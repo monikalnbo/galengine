@@ -150,3 +150,81 @@ fn 未赋值变量与数字比较按零() {
     assert!(!eval_cond("nope", ">=", "1", &vars).unwrap());
     assert!(eval_cond("nope", "==", "0", &vars).unwrap());
 }
+
+// ── v0.3.4：三元 / 数组 / 字典 / 成员访问 ────────────────────────────────
+
+#[test]
+fn 三元运算符() {
+    let vars = v();
+    assert_eq!(eval("f.a > 1 ? '大' : '小'", &vars).unwrap(), Value::Str("大".into()));
+    assert_eq!(eval("f.a > 5 ? '大' : '小'", &vars).unwrap(), Value::Str("小".into()));
+    // 右结合嵌套
+    assert_eq!(
+        eval("f.a == 1 ? '一' : f.a == 2 ? '二' : '多'", &vars).unwrap(),
+        Value::Str("二".into())
+    );
+    // 三元惰性：未选分支不报错
+    assert_eq!(eval("1 ? 2 : 1 / 0", &vars).unwrap(), Value::Int(2));
+    assert!(eval("1 ? 1 / 0 : 2", &vars).is_err());
+    // 缺冒号报错
+    assert!(eval("1 ? 2", &vars).is_err());
+}
+
+#[test]
+fn 数组字面量与下标() {
+    let vars = v();
+    assert_eq!(
+        eval("[1, 2, 3]", &vars).unwrap(),
+        Value::Arr(vec![Value::Int(1), Value::Int(2), Value::Int(3)])
+    );
+    assert_eq!(eval("[1, 2, 3][1]", &vars).unwrap(), Value::Int(2));
+    assert_eq!(eval("['a', 'b'][f.a - 1]", &vars).unwrap(), Value::Str("b".into()));
+    // 越界报错
+    assert!(eval("[1][5]", &vars).is_err());
+    // 空数组（与空字典按内容区分：[] 归数组、%[] 归字典）
+    assert!(matches!(eval("[]", &vars).unwrap(), Value::Arr(a) if a.is_empty()));
+}
+
+#[test]
+fn 字典字面量与成员访问() {
+    let vars = v();
+    assert_eq!(
+        eval("%[ name: '夏', hp: 100 ]", &vars).unwrap(),
+        Value::Dict(vec![("name".into(), Value::Str("夏".into())), ("hp".into(), Value::Int(100))])
+    );
+    // 成员访问（lexer 已把 f.x.y 并入标识符；此处走字面量后缀）
+    assert_eq!(eval("%[ name: '夏' ][ 'name' ]", &vars).unwrap(), Value::Str("夏".into()));
+    assert!(eval("%[ a: 1 ].b", &vars).is_err());
+    // 字典键必须字符串
+    assert!(eval("%[ 1: 'x' ]", &vars).is_err());
+    // 数组字典混合判别：有 Pair 即字典
+    assert!(matches!(eval("%[ ]", &vars).unwrap(), Value::Dict(_)));
+    // 数组里不能有冒号
+    assert!(eval("[1: 2]", &vars).is_err());
+}
+
+#[test]
+fn 变量成员路径与length() {
+    let mut vars = v();
+    vars.set(
+        "f.party",
+        Value::Dict(vec![("hp".into(), Value::Int(30)), ("mp".into(), Value::Int(8))]),
+    );
+    vars.set("f.bag", Value::Arr(vec![Value::Str("药".into()), Value::Int(3)]));
+    assert_eq!(eval("f.party.hp + f.party.mp", &vars).unwrap(), Value::Int(38));
+    assert_eq!(eval("f.bag.length", &vars).unwrap(), Value::Int(2));
+    assert_eq!(eval("f.bag[0]", &vars).unwrap(), Value::Str("药".into()));
+    assert_eq!(eval("f.bag.length > 1 ? '够' : '缺'", &vars).unwrap(), Value::Str("够".into()));
+    // 不支持的成员
+    assert!(eval("f.bag.hp", &vars).is_err());
+    assert!(eval("f.a.length", &vars).is_err());
+}
+
+#[test]
+fn 容器与逻辑真值() {
+    let vars = v();
+    assert_eq!(eval("[1] && 1", &vars).unwrap(), Value::Int(1));
+    assert_eq!(eval("[] || 1", &vars).unwrap(), Value::Int(1));
+    assert_eq!(eval("%[ a: 1 ] ? 'y' : 'n'", &vars).unwrap(), Value::Str("y".into()));
+    assert_eq!(eval("%[ ] ? 'y' : 'n'", &vars).unwrap(), Value::Str("n".into()));
+}

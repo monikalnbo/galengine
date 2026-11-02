@@ -96,8 +96,9 @@ fn if块与else() {
         .unwrap(),
     );
     // 块配对表由 load 建立；测试直接插入脚本时手动建立
-    let (blocks, elses) = crate::interp::blocks::pair(&it.scripts["if.ks"]).unwrap();
+    let (blocks, elses, _) = crate::interp::blocks::pair(&it.scripts["if.ks"]).unwrap();
     it.blocks.insert("if.ks".into(), blocks);
+    it.elsif_chains.insert("if.ks".into(), Default::default());
     it.else_targets.insert("if.ks".into(), elses);
     it.labels.insert(("if.ks".into(), "start".into()), 0);
     it.start("if.ks", None).unwrap();
@@ -115,8 +116,9 @@ fn if块无else且条件成立() {
         crate::lexer::parse_script("*start\nset f.a = 9\nif f.a == 9\nn 命中\nendif\nn 之后\n")
             .unwrap(),
     );
-    let (blocks, elses) = crate::interp::blocks::pair(&it.scripts["if.ks"]).unwrap();
+    let (blocks, elses, _) = crate::interp::blocks::pair(&it.scripts["if.ks"]).unwrap();
     it.blocks.insert("if.ks".into(), blocks);
+    it.elsif_chains.insert("if.ks".into(), Default::default());
     it.else_targets.insert("if.ks".into(), elses);
     it.labels.insert(("if.ks".into(), "start".into()), 0);
     it.start("if.ks", None).unwrap();
@@ -135,8 +137,9 @@ fn if块嵌套() {
         )
         .unwrap(),
     );
-    let (blocks, elses) = crate::interp::blocks::pair(&it.scripts["if.ks"]).unwrap();
+    let (blocks, elses, _) = crate::interp::blocks::pair(&it.scripts["if.ks"]).unwrap();
     it.blocks.insert("if.ks".into(), blocks);
+    it.elsif_chains.insert("if.ks".into(), Default::default());
     it.else_targets.insert("if.ks".into(), elses);
     it.labels.insert(("if.ks".into(), "start".into()), 0);
     it.start("if.ks", None).unwrap();
@@ -155,8 +158,9 @@ fn if单行表达式条件() {
         crate::lexer::parse_script("*start\nset f.a = 3\nif f.a * 2 > 5 *hit\nn 未命中\njump *end\n*hit\nn 命中\n*end\nn 之后\n")
             .unwrap(),
     );
-    let (blocks, elses) = crate::interp::blocks::pair(&it.scripts["one.ks"]).unwrap();
+    let (blocks, elses, _) = crate::interp::blocks::pair(&it.scripts["one.ks"]).unwrap();
     it.blocks.insert("one.ks".into(), blocks);
+    it.elsif_chains.insert("one.ks".into(), Default::default());
     it.else_targets.insert("one.ks".into(), elses);
     it.labels.insert(("one.ks".into(), "start".into()), 0);
     it.labels.insert(("one.ks".into(), "hit".into()), 5);
@@ -175,7 +179,7 @@ fn call与return回到下一行() {
         )
         .unwrap(),
     );
-    let (blocks, elses) = crate::interp::blocks::pair(&it.scripts["call.ks"]).unwrap();
+    let (blocks, elses, _) = crate::interp::blocks::pair(&it.scripts["call.ks"]).unwrap();
     it.blocks.insert("call.ks".into(), blocks);
     it.else_targets.insert("call.ks".into(), elses);
     it.labels.insert(("call.ks".into(), "start".into()), 0);
@@ -287,4 +291,117 @@ fn 未知预设位置中文报错带行号() {
         )
         .unwrap_err();
     assert!(e.contains("00.ks:7") && e.contains("nope") && e.contains("预设位置"), "{e}");
+}
+
+// ── v0.3.4：elsif 链 / emb / eval（赋值表达式）/ trace ───────────────────
+
+use crate::vars::Value;
+
+/// 装载剧本 + 建块配对表（测试快捷方式）
+fn load_with_blocks(it: &mut Interp, file: &str, src: &str) {
+    it.scripts.insert(file.into(), crate::lexer::parse_script(src).unwrap());
+    let (blocks, elses, chains) = crate::interp::blocks::pair(&it.scripts[file]).unwrap();
+    it.blocks.insert(file.into(), blocks);
+    it.elsif_chains.insert(file.into(), chains);
+    it.else_targets.insert(file.into(), elses);
+    it.labels.insert((file.into(), "start".into()), 0);
+    it.start(file, None).unwrap();
+}
+
+#[test]
+fn elsif链按序命中() {
+    let mut it = interp();
+    load_with_blocks(
+        &mut it,
+        "el.ks",
+        "*start\nset f.a = 5\nif f.a > 100\nn 巨大\nelsif f.a > 3\nn 中等\nelsif f.a > 4\nn 中等2\nelse\nn 小\nendif\nn 之后\n",
+    );
+    assert_eq!(it.pending_text.as_deref(), Some("中等"));
+    // 点击后走到下一个 elsif：已有命中分支 → 直接跳到 endif 之后
+    it.click().unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("之后"));
+}
+
+#[test]
+fn elsif全假落到else() {
+    let mut it = interp();
+    load_with_blocks(
+        &mut it,
+        "el2.ks",
+        "*start\nset f.a = 1\nif f.a > 100\nn 甲\nelsif f.a > 3\nn 乙\nelse\nn 丙\nendif\nn 之后\n",
+    );
+    assert_eq!(it.pending_text.as_deref(), Some("丙"));
+    it.click().unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("之后"));
+}
+
+#[test]
+fn elsif无else全假直落endif() {
+    let mut it = interp();
+    load_with_blocks(
+        &mut it,
+        "el3.ks",
+        "*start\nset f.a = 0\nif f.a > 1\nn 甲\nelsif f.a > 2\nn 乙\nendif\nn 落点\n",
+    );
+    assert_eq!(it.pending_text.as_deref(), Some("落点"));
+}
+
+#[test]
+fn elsif链嵌套内外层互不干扰() {
+    let mut it = interp();
+    load_with_blocks(
+        &mut it,
+        "el4.ks",
+        "*start\nset f.a = 1\nset f.b = 9\nif f.a > 0\nif f.b > 100\nn 内甲\nelsif f.b > 5\nn 内乙\nelse\nn 内丙\nendif\nn 外尾\nendif\nn 结束\n",
+    );
+    assert_eq!(it.pending_text.as_deref(), Some("内乙"));
+    it.click().unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("外尾"));
+}
+
+#[test]
+fn emb拼接表达式结果进台词() {
+    let mut it = interp();
+    it.vars.set("f.hp", Value::Int(42));
+    it.exec(Command::Emb { expr: "'HP：' + f.hp".into() }, "t.ks:1").unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("HP：42"));
+}
+
+#[test]
+fn eval赋值表达式直接量与复合() {
+    let mut it = interp();
+    it.exec(Command::Eval { expr: "f.a = 5".into() }, "t:1").unwrap();
+    it.exec(Command::Eval { expr: "f.a += 3".into() }, "t:2").unwrap();
+    it.exec(Command::Eval { expr: "f.s = '夏' + '天'".into() }, "t:3").unwrap();
+    it.exec(Command::Eval { expr: "f.arr = [1, 2, 3]".into() }, "t:4").unwrap();
+    it.exec(Command::Eval { expr: "f.arr[1] = 20".into() }, "t:5").unwrap();
+    it.exec(Command::Eval { expr: "f.d = %[ name: '岚', hp: 9 ]".into() }, "t:6").unwrap();
+    it.exec(Command::Eval { expr: "f.d.hp += 1".into() }, "t:7").unwrap();
+    assert_eq!(it.vars.get("f.a"), Some(&Value::Int(8)));
+    assert_eq!(it.vars.get("f.s"), Some(&Value::Str("夏天".into())));
+    assert_eq!(
+        it.vars.get("f.arr"),
+        Some(&Value::Arr(vec![Value::Int(1), Value::Int(20), Value::Int(3)]))
+    );
+    assert_eq!(
+        it.vars.get("f.d"),
+        Some(&Value::Dict(vec![
+            ("name".into(), Value::Str("岚".into())),
+            ("hp".into(), Value::Int(10))
+        ]))
+    );
+    // 纯表达式 eval 也允许（不求值结果丢弃）
+    it.exec(Command::Eval { expr: "1 + 2".into() }, "t:8").unwrap();
+    // 赋值目标缺失报错
+    assert!(it.exec(Command::Eval { expr: "= 5".into() }, "t:9").is_err());
+}
+
+#[test]
+fn trace求值内联且不支持时原样保留() {
+    let mut it = interp();
+    it.vars.set("f.n", Value::Int(7));
+    // 正常路径不报错（日志落盘由 engine.log 承载，这里只验证求值不炸）
+    it.exec(Command::Trace { text: "当前 n=%f.n，双倍=%f.n * 2".into() }, "t:1").unwrap();
+    // 求值失败的表达式：不报错（trace 是诊断通道，不中断演出）
+    it.exec(Command::Trace { text: "坏字段 %f.n ?? x".into() }, "t:2").unwrap();
 }
