@@ -313,6 +313,39 @@ pub enum Command {
     Trace {
         text: String,
     },
+    /// v0.3.13 `graph 素材名`：行内嵌图（KAG3 graph）——拼 \u{b}占位符进当前台词，
+    /// 排版层成 Unit::Image（整体不拆行），渲染时按行高等比贴图
+    Graph {
+        storage: String,
+    },
+    /// v0.3.13 `ruby text=基底 alt=注音`：生成 `[基底]^(注音)` 文法拼进当前台词（KAG3 ruby 子集）
+    RubyTag {
+        text: String,
+        alt: String,
+    },
+    /// v0.3.13 `hch 文本`：行内样式片段（本引擎无行内色通道，DEBUG 留证后按普通文本拼进台词）
+    Hch {
+        text: String,
+    },
+    /// v0.3.13 `font size= n color=…`：行内文字属性（记录 + DEBUG 留证，演出零变化）
+    Font {
+        size: Option<u16>,
+        color: Option<String>,
+    },
+    /// v0.3.13 `deffont …` / `resetfont`：页面级文字属性缺省（记录 + DEBUG 留证）
+    Deffont {
+        size: Option<u16>,
+        color: Option<String>,
+    },
+    Resetfont,
+    /// v0.3.13 `style …` / `defstyle …` / `resetstyle`：段落样式（记录 + DEBUG 留证）
+    Style {
+        align: Option<String>,
+    },
+    Defstyle {
+        align: Option<String>,
+    },
+    Resetstyle,
     /// 调用子程序：压栈后跳转，`return` 回到下一行
     Call {
         file: Option<String>,

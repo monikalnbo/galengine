@@ -39,6 +39,16 @@ pub fn resolve(kind: &str, storage: &str) -> String {
             ],
             &format!("{data}/video/{storage}.mp4"),
         ),
+        // v0.3.13 内嵌图（graph 标签）：行内小图，image/ 目录优先，回落 bgimage/cg
+        "image" => first_exists(
+            &[
+                format!("{data}/image/{storage}.png"),
+                format!("{data}/image/{storage}.jpg"),
+                format!("{data}/bgimage/{storage}.png"),
+                format!("{data}/cg/{storage}.png"),
+            ],
+            &format!("{data}/image/{storage}.png"),
+        ),
         // v0.3.10 动画档（animstart）：asd/ 目录下 .asd 文本
         "asd" => format!("{data}/asd/{storage}"),
         _ => format!("{data}/{storage}"),

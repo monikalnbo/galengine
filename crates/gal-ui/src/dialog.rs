@@ -7,6 +7,7 @@ use sdl2::rect::Rect;
 use sdl2::render::{BlendMode, Canvas};
 use sdl2::video::Window;
 
+use gal_render::assets::TextureBank;
 use gal_text::font::FontBook;
 use gal_text::layout::Unit;
 use gal_text::writer::Typewriter;
@@ -28,11 +29,12 @@ fn visible_prefix(units: &[Unit], shown: usize) -> Vec<&Unit> {
     out
 }
 
-/// 绘制一段单元序列（含 ruby 与阴影）。返回已画到的 x 坐标。
+/// 绘制一段单元序列（含 ruby、内嵌图与阴影）。返回已画到的 x 坐标。
 #[allow(clippy::too_many_arguments)]
 fn draw_units(
     canvas: &mut Canvas<Window>,
     fonts: &mut FontBook,
+    bank: &mut TextureBank,
     units: &[Unit],
     x: i32,
     y: i32,
@@ -66,9 +68,30 @@ fn draw_units(
                 draw_piece(canvas, fonts, base, bx, y, o, style.font_size, color, shadow)?;
                 cx += w;
             }
+            Unit::Image(name) => {
+                // v0.3.13 内嵌图：等比缩放进一行行高内（行高不够则按行高）；缺文件跳过不崩
+                let line_h = style.font_size as u32;
+                if let Some(dst) = image_rect(bank, name, cx, y, line_h) {
+                    bank.draw_scaled(canvas, &dst_path(name), dst, 1.0)?;
+                }
+                cx += line_h.max(4) as i32;
+            }
         }
     }
     Ok(cx)
+}
+
+/// 内嵌图素材路径（gal-config::paths 的 image kind）与按行高等比的落位矩形
+fn dst_path(name: &str) -> String {
+    gal_config::paths::resolve("image", name)
+}
+
+fn image_rect(bank: &mut TextureBank, name: &str, x: i32, y: i32, line_h: u32) -> Option<Rect> {
+    let path = dst_path(name);
+    let (w, h) = bank.size_of(&path)?;
+    let k = line_h as f32 / h.max(1) as f32;
+    let dw = ((w as f32) * k).round().max(1.0) as u32;
+    Some(Rect::new(x, y, dw.min(line_h * 8), line_h))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -102,6 +125,7 @@ fn style_outline(o: i32) -> u8 {
 pub fn draw(
     canvas: &mut Canvas<Window>,
     fonts: &mut FontBook,
+    bank: &mut TextureBank,
     style: &DialogStyle,
     name: Option<&str>,
     tw: &Typewriter,
@@ -169,7 +193,7 @@ pub fn draw(
             _ => text_color,
         };
         let visible: Vec<Unit> = visible.into_iter().cloned().collect();
-        draw_units(canvas, fonts, &visible, x, y, style, color)?;
+        draw_units(canvas, fonts, bank, &visible, x, y, style, color)?;
     }
 
     // 页满指示：右下角「▼」呼吸（作者可关）

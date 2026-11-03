@@ -804,3 +804,29 @@ fn v0312_waittrig等待与放行() {
     it.exec(Command::WaitTrig { name: "open2".into() }, "t:2").unwrap();
     assert_eq!(it.state, RunState::Ended);
 }
+
+#[test]
+fn v0313_graph与ruby拼进当前台词() {
+    let mut it = interp();
+    // graph：\u{b}素材名\u{b} 占位符
+    it.pending_text = Some("看她".into());
+    it.exec(Command::Graph { storage: "face_a".into() }, "t:1").unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("看她\u{b}face_a\u{b}"));
+    // 无台词时 graph 拼在已有 pending 后（同一行继续追加，emb 同款语义）
+    it.exec(Command::Graph { storage: "solo".into() }, "t:2").unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("看她\u{b}face_a\u{b}\u{b}solo\u{b}"));
+    // ruby：转成 [基底]^(注音) 文法
+    it.pending_text = Some("名字是".into());
+    it.exec(Command::RubyTag { text: "夏".into(), alt: "なつ".into() }, "t:3").unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("名字是[夏]^(なつ)"));
+    // hch：按普通文本拼进（简化口径）
+    it.pending_text = Some("他说".into());
+    it.exec(Command::Hch { text: "重要".into() }, "t:4").unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("他说重要"));
+    // font/style 族：无输出无状态（演出零变化）
+    it.exec(Command::Font { size: Some(24), color: Some("0xFF0000".into()) }, "t:5").unwrap();
+    it.exec(Command::Resetfont, "t:6").unwrap();
+    it.exec(Command::Style { align: Some("center".into()) }, "t:7").unwrap();
+    it.exec(Command::Resetstyle, "t:8").unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("他说重要"));
+}

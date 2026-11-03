@@ -2,6 +2,35 @@
 
 遵循 [语义化版本](https://semver.org/lang/zh-CN/)。旧 `game.yaml`、旧存档、旧 `savedata/global.json` 均可直接使用。
 
+## v0.3.13 — 2026-11-03
+
+**文本标记批**（backlog P1-5）：KAG3 `graph` / `ruby` / `hch` / `font` / `deffont` / `resetfont` / `style` / `defstyle` / `resetstyle`。
+存档格式零改动。旧剧本/旧配置/旧存档零改动兼容（实测验证）。
+
+### 新增（9 个标签）
+
+- `graph 素材名`：行内嵌图（KAG3 graph）——`\u{b}` 占位符通道生成 `Unit::Image`，
+  整体不拆行、朗读自动去图；渲染时经 TextureBank 按**行高等比**贴图
+  （素材探测 `image/` → `bgimage/` → `cg/`；缺文件跳过不崩）。
+- `ruby text=基底 alt=注音`：生成既有 `[基底]^(注音)` 文法（排版/断行/朗读全链路复用，
+  与剧本内直接写注音文法完全同效）。
+- `hch 文本`：行内样式片段（无行内色通道 → 按普通文本拼进台词，DEBUG 留证）。
+- `font size= n color=…` / `deffont …` / `resetfont`：行内/页面级文字属性
+  （记录 + DEBUG 留证，演出零变化——字号行内变化留待后续批次）。
+- `style align=…` / `defstyle align=…` / `resetstyle`：段落样式（同上简化口径）。
+
+### 工程
+
+- `gal-config::paths` 新增 `image` kind（内嵌图素材探测链）。
+- `TextureBank::size_of`：素材尺寸查询（内嵌图等比缩放用）。
+- `gal-ui::dialog` 绘制链路接入 TextureBank（`draw`/`draw_units` 增 bank 参数）。
+- 验收剧本 `game/data/scenario/texttag-demo.ks` + 合成内嵌图素材 `data/image/*.png`。
+
+### 兼容性
+
+- `Unit` 枚举新增 `Image` 变体（纯新增，旧文本不含 `\u{b}` 占位符，行为零变化）。
+- 存档快照结构零改动；旧剧本（v0.3.2~v0.3.12 全时代）十一剧本全量无头回归 ALL_PASS。
+
 ## v0.3.12 — 2026-11-03
 
 **存档控制标签批**（backlog #52/54/58/59/60/61/62/64/65）：KAG3 `s` / `disablestore` / `tempsave` / `tempload` / `copybookmark` / `erasebookmark` / `record` / `goback` / `waittrig`。

@@ -133,7 +133,7 @@ pub fn frame(
                         }
                     }
                     _ => {
-                        dialog::draw(tc, fonts, style, name.as_deref(), &g.interp.tw, now)?;
+                        dialog::draw(tc, fonts, bank, style, name.as_deref(), &g.interp.tw, now)?;
                         bottombar::draw(tc, fonts, &g.conf.ui.bottombar, &skin, auto, g.ctrl_hold)?;
                     }
                 }

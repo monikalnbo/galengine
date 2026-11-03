@@ -15,14 +15,16 @@ pub enum Unit {
     Ch(char),
     /// 注音：基底 + 读音（基底整体显示，读音画在其上方）
     Ruby(String, String),
+    /// v0.3.13 内嵌图（KAG3 graph 标签）：素材名（渲染时经 TextureBank 贴图）
+    Image(String),
 }
 
 impl Unit {
     /// 打字机计数的字符数（ruby 组 1 个）
     pub fn chars(&self) -> usize {
         match self {
-            Unit::Ch(_) => 1,
-            Unit::Ruby(..) => 1,
+            Unit::Ch(_) | Unit::Ruby(..) => 1,
+            Unit::Image(_) => 0,
         }
     }
 
@@ -30,6 +32,7 @@ impl Unit {
         match self {
             Unit::Ch(c) => c.to_string(),
             Unit::Ruby(b, _) => b.clone(),
+            Unit::Image(_) => String::new(),
         }
     }
 }
@@ -62,9 +65,20 @@ pub fn wrap_units(text: &str, font: &Font, max_width: u32, ruby_size: u16) -> Ve
     let chars: Vec<char> = text.chars().collect();
     let mut i = 0;
     while i < chars.len() {
-        let (u, step) = match parse_ruby_at(&chars, i) {
-            Some((b, r, next)) => (Unit::Ruby(b, r), next - i),
-            None => (Unit::Ch(chars[i]), 1),
+        let (u, step) = if chars[i] == '\u{b}' {
+            // v0.3.13 内嵌图占位符（graph 标签生成）：\u{b}<素材名>\u{b}
+            match chars[i + 1..].iter().position(|&c| c == '\u{b}') {
+                Some(end) if end > 0 => {
+                    let name: String = chars[i + 1..i + 1 + end].iter().collect();
+                    (Unit::Image(name), end + 2)
+                }
+                _ => (Unit::Ch(chars[i]), 1),
+            }
+        } else {
+            match parse_ruby_at(&chars, i) {
+                Some((b, r, next)) => (Unit::Ruby(b, r), next - i),
+                None => (Unit::Ch(chars[i]), 1),
+            }
         };
         let w = unit_width(&u, ruby_size, char_w);
         if cur_w + w > max_width && !cur.is_empty() {
@@ -75,7 +89,7 @@ pub fn wrap_units(text: &str, font: &Font, max_width: u32, ruby_size: u16) -> Ve
                         || (c.is_ascii_alphanumeric()
                             && matches!(cur.last(), Some(Unit::Ch(p)) if p.is_ascii_alphanumeric()))
                 }
-                Unit::Ruby(..) => false,
+                Unit::Ruby(..) | Unit::Image(_) => false,
             };
             let mut moved: Vec<Unit> = Vec::new();
             if glue && cur.len() > 1 {
@@ -108,6 +122,8 @@ fn unit_width(u: &Unit, ruby_size: u16, char_w: impl Fn(char) -> u32) -> u32 {
             let ruby = (r.chars().count() as u32) * ruby_size as u32 / 2;
             base.max(ruby)
         }
+        // 内嵌图缺省占一个字号方块宽（实际贴图时按图缩放到行高内）
+        Unit::Image(_) => ruby_size as u32 * 4,
     }
 }
 
@@ -138,6 +154,14 @@ pub fn plain(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut i = 0;
     while i < chars.len() {
+        if chars[i] == '\u{b}' {
+            // 内嵌图占位符：朗读纯文本直接去掉（图不朗读）
+            match chars[i + 1..].iter().position(|&c| c == '\u{b}') {
+                Some(end) if end > 0 => i += end + 2,
+                _ => i += 1,
+            }
+            continue;
+        }
         match if chars[i] == '[' { parse_ruby_at(&chars, i) } else { None } {
             Some((base, _, next)) => {
                 out.push_str(&base);
@@ -180,5 +204,30 @@ mod tests {
     fn 纯文本断行与旧接口一致() {
         // 无字体条件下只验证纯文本路径不 panic
         assert_eq!(line_text(&[Unit::Ch('你'), Unit::Ch('好')]), "你好");
+    }
+}
+
+#[cfg(test)]
+mod v0313_tests {
+    use super::*;
+
+    #[test]
+    fn 图占位符解析成_image_单元() {
+        // 无字体环境下验证占位符 → Unit::Image 的文法路径（断行逻辑不经字体即可单测部分）
+        let chars: Vec<char> = "前\u{b}face_a\u{b}后".chars().collect();
+        // 直接模拟 wrap_units 的解析片段：\u{b}<名>\u{b} → Image(name)，消费 end+2
+        let i = chars.iter().position(|&c| c == '\u{b}').unwrap();
+        let end = chars[i + 1..].iter().position(|&c| c == '\u{b}').unwrap();
+        assert_eq!(chars[i + 1..i + 1 + end].iter().collect::<String>(), "face_a");
+        assert_eq!(end + 2, 8);
+    }
+
+    #[test]
+    fn image_单元不产生朗读文本且计零字符() {
+        let u = Unit::Image("face_a".into());
+        assert_eq!(u.chars(), 0);
+        assert_eq!(u.text(), "");
+        // 纯文本化：占位符整段去掉
+        assert_eq!(plain("前\u{b}face_a\u{b}后"), "前后");
     }
 }

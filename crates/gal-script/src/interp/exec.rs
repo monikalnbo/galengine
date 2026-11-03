@@ -528,6 +528,79 @@ impl Interp {
                 );
                 Ok(false)
             }
+            Command::Graph { storage } => {
+                // v0.3.13 KAG3 graph：\u{b}素材名\u{b} 占位符拼进当前台词（无台词 = 单独一行）
+                let piece = format!("\u{b}{storage}\u{b}");
+                match self.pending_text.take() {
+                    Some(t) => self.pending_text = Some(t + &piece),
+                    None => self.pending_text = Some(piece),
+                }
+                Ok(false)
+            }
+            Command::RubyTag { text, alt } => {
+                // v0.3.13 KAG3 ruby：转成既有 `[基底]^(注音)` 文法（排版/朗读全链路复用）
+                let piece = format!("[{text}]^({alt})");
+                match self.pending_text.take() {
+                    Some(t) => self.pending_text = Some(t + &piece),
+                    None => self.pending_text = Some(piece),
+                }
+                Ok(false)
+            }
+            Command::Hch { text } => {
+                // 行内样式片段：无行内色通道，按普通文本拼进台词 + DEBUG 留证
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    &format!("[hch] 行内样式简化为普通文本：{text}"),
+                );
+                match self.pending_text.take() {
+                    Some(t) => self.pending_text = Some(t + &text),
+                    None => self.pending_text = Some(text),
+                }
+                Ok(false)
+            }
+            Command::Font { size, color } => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    &format!(
+                        "[font] 行内文字属性记录（演出零变化）：size={size:?} color={color:?}"
+                    ),
+                );
+                Ok(false)
+            }
+            Command::Deffont { size, color } => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    &format!("[deffont] 页面级文字属性记录：size={size:?} color={color:?}"),
+                );
+                Ok(false)
+            }
+            Command::Resetfont => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    "[resetfont] 文字属性复位（DEBUG 留证）",
+                );
+                Ok(false)
+            }
+            Command::Style { align } | Command::Defstyle { align } => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    &format!("[style] 段落样式记录（演出零变化）：align={align:?}"),
+                );
+                Ok(false)
+            }
+            Command::Resetstyle => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    "[resetstyle] 段落样式复位（DEBUG 留证）",
+                );
+                Ok(false)
+            }
             Command::Else => {
                 let else_at = self.pc - 1;
                 // 有命中分支标记时是「真分支走完跳过」；无标记 = elsif 全假落 else，照常进

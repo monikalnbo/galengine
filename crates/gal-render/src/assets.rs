@@ -56,6 +56,20 @@ impl<'a> TextureBank<'a> {
         self.prefetch.request(path);
     }
 
+    /// v0.3.13 内嵌图量宽：素材尺寸（需已缓存或可同步解码；缺文件返回 None 跳过）
+    pub fn size_of(&mut self, path: &str) -> Option<(u32, u32)> {
+        if !self.cache.contains_key(path) {
+            let dec = match self.prefetch.take(path) {
+                Some(d) => d,
+                None => std::sync::Arc::new(prefetch::decode(path).ok()?),
+            };
+            let tex = self.build_decoded(path, &dec).ok()?;
+            self.cache.insert(path.to_string(), tex);
+        }
+        let q = self.cache.get(path)?.query();
+        Some((q.width, q.height))
+    }
+
     fn build_decoded(&self, path: &str, dec: &Decoded) -> Result<Texture<'a>, String> {
         // 护眼降饱和：仅背景/CG（立绘保持原饱和度突出主体）
         let pixels = if path.contains("/bgimage/") && self.bg_saturation < 1.0 {

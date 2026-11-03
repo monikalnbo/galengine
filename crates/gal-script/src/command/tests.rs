@@ -479,3 +479,42 @@ fn v0312存档控制标签_解析() {
     ));
     assert!(cmd("waittrig", "").is_err());
 }
+
+#[test]
+fn v0313文本标记标签_解析() {
+    // graph 素材名
+    assert!(matches!(
+        cmd("graph", "face_a").unwrap(),
+        Command::Graph { storage } if storage == "face_a"
+    ));
+    assert!(cmd("graph", "").is_err());
+    // ruby text=基底 alt=注音
+    assert!(matches!(
+        cmd("ruby", "text=夏 alt=なつ").unwrap(),
+        Command::RubyTag { text, alt } if text == "夏" && alt == "なつ"
+    ));
+    assert!(matches!(
+        cmd("ruby", "text=夏 alt=\"な つ\"").unwrap(),
+        Command::RubyTag { alt, .. } if alt == "な つ"
+    ));
+    assert!(cmd("ruby", "").is_err());
+    assert!(cmd("ruby", "text=夏").is_err());
+    // hch / font / deffont / resetfont / style / defstyle / resetstyle
+    assert!(matches!(cmd("hch", "重要").unwrap(), Command::Hch { text } if text == "重要"));
+    assert!(matches!(
+        cmd("font", "size=24 color=0xFF0000").unwrap(),
+        Command::Font { size: Some(24), color: Some(_) }
+    ));
+    assert!(matches!(cmd("font", "").unwrap(), Command::Font { size: None, color: None }));
+    assert!(matches!(
+        cmd("deffont", "size=20").unwrap(),
+        Command::Deffont { size: Some(20), color: None }
+    ));
+    assert!(matches!(cmd("resetfont", "").unwrap(), Command::Resetfont));
+    assert!(matches!(
+        cmd("style", "align=center").unwrap(),
+        Command::Style { align: Some(ref a) } if a == "center"
+    ));
+    assert!(matches!(cmd("defstyle", "").unwrap(), Command::Defstyle { align: None }));
+    assert!(matches!(cmd("resetstyle", "").unwrap(), Command::Resetstyle));
+}

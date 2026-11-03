@@ -433,6 +433,43 @@ impl Command {
             "trace" if !rest.trim().is_empty() => {
                 Ok(Command::Trace { text: rest.trim().to_string() })
             }
+            // v0.3.13 文本标记族：graph（行内图）/ ruby（注音）/ hch / font / style 族
+            "graph" if !rest.trim().is_empty() => {
+                Ok(Command::Graph { storage: rest.trim().to_string() })
+            }
+            "ruby" if !rest.trim().is_empty() => {
+                let mut text = String::new();
+                let mut alt = String::new();
+                for (k, v) in parse_attrs(rest) {
+                    match k.as_str() {
+                        "text" => text = v,
+                        "alt" => alt = v,
+                        _ => {}
+                    }
+                }
+                if text.is_empty() || alt.is_empty() {
+                    return err("ruby 用法：ruby text=基底 alt=注音");
+                }
+                Ok(Command::RubyTag { text, alt })
+            }
+            "hch" if !rest.trim().is_empty() => Ok(Command::Hch { text: rest.trim().to_string() }),
+            "font" | "deffont" => {
+                let (size, color) = font_attrs(rest);
+                match name {
+                    "font" => Ok(Command::Font { size, color }),
+                    _ => Ok(Command::Deffont { size, color }),
+                }
+            }
+            "resetfont" if rest.trim().is_empty() => Ok(Command::Resetfont),
+            "style" | "defstyle" => {
+                let align =
+                    parse_attrs(rest).into_iter().find(|(k, _)| k == "align").map(|(_, v)| v);
+                match name {
+                    "style" => Ok(Command::Style { align }),
+                    _ => Ok(Command::Defstyle { align }),
+                }
+            }
+            "resetstyle" if rest.trim().is_empty() => Ok(Command::Resetstyle),
             "call" => match tokens.as_slice() {
                 [t] => Ok(call(None, t)),
                 [f, t] => Ok(call(Some(f.to_string()), t)),
@@ -628,4 +665,61 @@ fn call(file: Option<String>, target: &str) -> Command {
 
 fn num<T: std::str::FromStr>(s: impl AsRef<str>) -> Result<T, String> {
     s.as_ref().parse::<T>().map_err(|_| format!("数字参数无效：{}", s.as_ref()))
+}
+
+/// `key=value` 属性串解析（引号值可含空格；与宏批 parse_attrs 同口径）
+pub(crate) fn parse_attrs(rest: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let bytes = rest.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i].is_ascii_whitespace() {
+            i += 1;
+            continue;
+        }
+        let kstart = i;
+        while i < bytes.len() && !bytes[i].is_ascii_whitespace() && bytes[i] != b'=' {
+            i += 1;
+        }
+        let key = rest[kstart..i].to_string();
+        if key.is_empty() {
+            i += 1;
+            continue;
+        }
+        if i < bytes.len() && bytes[i] == b'=' {
+            i += 1;
+            let (v, next) = if i < bytes.len() && (bytes[i] == b'"' || bytes[i] == b'\'') {
+                let q = bytes[i];
+                let vstart = i + 1;
+                let vend =
+                    rest[vstart..].find(q as char).map(|p| vstart + p).unwrap_or(bytes.len());
+                (&rest[vstart..vend], (vend + 1).min(bytes.len()))
+            } else {
+                let vstart = i;
+                while i < bytes.len() && !bytes[i].is_ascii_whitespace() {
+                    i += 1;
+                }
+                (&rest[vstart..i], i)
+            };
+            out.push((key, v.to_string()));
+            i = next;
+        } else {
+            out.push((key, String::new()));
+        }
+    }
+    out
+}
+
+/// font/deffont 的 size/color 属性（其余属性忽略——简化口径）
+fn font_attrs(rest: &str) -> (Option<u16>, Option<String>) {
+    let mut size = None;
+    let mut color = None;
+    for (k, v) in parse_attrs(rest) {
+        match k.as_str() {
+            "size" => size = v.parse().ok(),
+            "color" => color = Some(v),
+            _ => {}
+        }
+    }
+    (size, color)
 }
