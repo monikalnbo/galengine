@@ -74,6 +74,13 @@ pub enum Command {
     AnimStop {
         n: Option<u8>,
     },
+    // ===== v0.3.7 双页原子转场 =====
+    /// forelay [层] [ms] [method]：back 页内容一次翻上到 fore 页（层号缺省=0 背景）
+    ForeLay {
+        n: Option<u8>,
+        dur_ms: u32,
+        method: String,
+    },
     // ===== v0.3.3 KAG3 等待标签（wm/wv/wp）=====
     /// wm：等 BGM 播完
     WaitMusic,

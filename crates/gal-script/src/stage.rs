@@ -458,6 +458,33 @@ impl Stage {
         Ok(())
     }
 
+    /// v0.3.7 forelay/无前缀 trans（KAG3 双页原子转场）：back 页内容一次翻上到 fore 页。
+    ///
+    /// back 页为空 = 淡出到空（KAG3 口径：trans 无后页目标即隐层）；
+    /// fore 页旧内容定格进 TransClip::from 由渲染层叠画，转场结束丢弃。
+    /// 存档语义不变：fore 页 cur 立即等于 back 页内容（转场后状态），back 页翻上后清空。
+    pub fn fore_trans(&mut self, n: usize, dur_ms: u32, method: TransMethod) -> Result<(), String> {
+        let to = self.layers[n].back.clone();
+        self.layers[n].back = None;
+        if to.is_none() {
+            // 淡出到空：与 Trans 指令 hide 分支同构
+            let old = self.layers[n].cur.clone();
+            self.layers[n].set(None, 0);
+            self.trans = Some(TransClip {
+                method,
+                layer: n,
+                to: String::new(),
+                from: old,
+                offset: self.layers[n].offset,
+                dur_ms: dur_ms as f32,
+                left_ms: dur_ms as f32,
+            });
+            return Ok(());
+        }
+        self.start_trans(n, to.unwrap(), dur_ms, method);
+        Ok(())
+    }
+
     /// v0.3.6 copylay（KAG3）：把 from 层的 fore 页内容复制到 to 层 fore 页（0ms 直切）。
     pub fn copylay(&mut self, from: usize, to: usize, dur_ms: u32) -> Result<(), String> {
         self.ensure_layer(from)?;
@@ -800,6 +827,47 @@ mod tests {
             serde_json::from_str(r#"{"bg":"bg/x","chars":[null,null,null],"cg":null}"#).unwrap();
         r.restore(legacy);
         assert!(r.layers.iter().all(|l| l.back.is_none()));
+    }
+
+    // ===== v0.3.7 forelay/无前缀 trans：双页原子转场 =====
+
+    #[test]
+    fn fore_trans把back页翻上且back清空() {
+        let mut s = Stage::new();
+        s.set_layer(0, Some("bg/a".into()), 0).unwrap();
+        s.backlay(0, false).unwrap();
+        s.set_layer(0, Some("bg/b".into()), 0).unwrap(); // fore 已换，back 仍是 bg/a
+        s.fore_trans(0, 500, TransMethod::Crossfade).unwrap();
+        assert_eq!(s.layers[0].cur.as_deref(), Some("bg/a")); // back 内容翻上
+        assert!(s.layers[0].back.is_none()); // back 页清空
+        assert!(s.trans.is_some()); // 转场在途（旧 fore 定格）
+        assert_eq!(s.trans.as_ref().unwrap().from.as_deref(), Some("bg/b"));
+        assert_eq!(s.trans.as_ref().unwrap().to, "bg/a");
+    }
+
+    #[test]
+    fn fore_trans空back页淡出到空() {
+        let mut s = Stage::new();
+        s.set_layer(0, Some("bg/a".into()), 0).unwrap();
+        // 不做 backlay → back 页为空 → 淡出
+        s.fore_trans(0, 400, TransMethod::Crossfade).unwrap();
+        assert!(s.layers[0].cur.is_none());
+        let t = s.trans.as_ref().unwrap();
+        assert_eq!(t.from.as_deref(), Some("bg/a"));
+        assert_eq!(t.to, "");
+    }
+
+    #[test]
+    fn fore_trans存档语义为转场后状态() {
+        let mut s = Stage::new();
+        s.set_layer(0, Some("bg/a".into()), 0).unwrap();
+        s.backlay(0, false).unwrap();
+        s.set_layer(0, Some("bg/b".into()), 0).unwrap();
+        s.fore_trans(0, 500, TransMethod::Crossfade).unwrap();
+        let mut r = Stage::new();
+        r.restore(s.snapshot());
+        assert_eq!(r.layers[0].cur.as_deref(), Some("bg/a"));
+        assert!(r.trans.is_none()); // 在途转场不进存档（存档=转场后状态）
     }
 
     #[test]

@@ -586,3 +586,44 @@ fn v036_move无在途时wa直通() {
     it.exec(Command::WaitMove, "t:1").unwrap();
     assert!(!matches!(it.state, crate::interp::RunState::WaitTimer { .. }));
 }
+
+// ── v0.3.7：forelay / 无前缀 trans（双页原子转场）──────────────────────────
+
+#[test]
+fn v037_forelay指令翻上back页() {
+    let mut it = interp();
+    it.stage.set_layer(0, Some("bg/a".into()), 0).unwrap();
+    it.exec(Command::BackLay { n: Some(0), hide: false }, "t:1").unwrap();
+    it.stage.set_layer(0, Some("bg/b".into()), 0).unwrap();
+    it.exec(Command::ForeLay { n: None, dur_ms: 400, method: "universal".into() }, "t:2").unwrap();
+    assert_eq!(it.stage.layers[0].cur.as_deref(), Some("bg/a"));
+    assert!(it.stage.layers[0].back.is_none());
+    assert!(it.stage.trans.is_some());
+    // wt 可等在途转场
+    it.exec(Command::WaitTrans, "t:3").unwrap();
+    assert!(matches!(it.state, RunState::WaitTimer { .. }));
+}
+
+#[test]
+fn v037_无前缀trans翻上back页() {
+    let mut it = interp();
+    it.stage.set_layer(0, Some("bg/a".into()), 0).unwrap();
+    it.exec(Command::BackLay { n: Some(0), hide: false }, "t:1").unwrap();
+    it.stage.set_layer(0, Some("bg/c".into()), 0).unwrap();
+    // 无前缀形态：trans 500 crossfade
+    it.exec(Command::ForeLay { n: None, dur_ms: 500, method: "crossfade".into() }, "t:2").unwrap();
+    assert_eq!(it.stage.layers[0].cur.as_deref(), Some("bg/a"));
+    assert_eq!(it.stage.trans.as_ref().unwrap().method, crate::stage::TransMethod::Crossfade);
+}
+
+#[test]
+fn v037_transon关闭时forelay直切() {
+    let mut it = interp();
+    it.trans_enabled = false;
+    it.stage.set_layer(0, Some("bg/a".into()), 0).unwrap();
+    it.exec(Command::BackLay { n: Some(0), hide: false }, "t:1").unwrap();
+    it.exec(Command::ForeLay { n: None, dur_ms: 500, method: "universal".into() }, "t:2").unwrap();
+    assert_eq!(it.stage.layers[0].cur.as_deref(), Some("bg/a"));
+    // 直切：转场片段时长为 0（与 Trans 指令同构，下一帧即完成）
+    assert_eq!(it.stage.trans.as_ref().map(|t| t.dur_ms), Some(0.0));
+}

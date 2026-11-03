@@ -2,6 +2,26 @@
 
 遵循 [语义化版本](https://semver.org/lang/zh-CN/)。旧 `game.yaml`、旧存档、旧 `savedata/global.json` 均可直接使用。
 
+## v0.3.7 — 2026-11-03
+
+**双页原子转场批**：KAG3 `forelay` / 无前缀 `trans`（backlog P1-2 后半，消费 v0.3.6 back 页）。
+「后页准备（backlay）→ 一次翻上（trans/forelay）」核心演出形态补齐。
+存档格式零改动（在途转场照旧不进存档，fore 页立即等于转场后状态）。旧剧本/旧配置/旧存档零改动兼容（实测验证）。
+
+### 新增标签（2 个形态）
+
+- `forelay [层] [ms] [method]`：back 页内容一次翻上到 fore 页（层号缺省=0 背景；
+  ms 缺省 700；method 同 trans 方法族 universal/crossfade/slide/scroll）。
+- 无前缀 `trans [ms] [method]`：把已备好的 back 页翻上（与 forelay 同语义，KAG3 原生参数形态；
+  首参不是合法层号时按此形态解析，`trans 500 crossfade` / `trans 400` 均可）。
+- 空后页 = 淡出到空（KAG3 口径）；`wt` 照旧等在途转场；玩家关转场（sf.transOn=0）时直切。
+
+### 兼容性
+
+- `Layer.back` 数据模型不变；转场后 back 页清空（KAG3 语义：翻上即消费）。
+- 旧「trans 层号 素材」语法全部保留（`trans 0 bg/b 500 crossfade` 照旧），消歧规则见解析层注释。
+- 存档快照结构零改动（backs 字段 v0.3.6 已有）。
+
 ## v0.3.6 — 2026-11-02
 
 **双页模型 + 动画层批**：KAG3 fore/back 双页与 move 位移动画（backlog P1-2/P1-3 前半）。

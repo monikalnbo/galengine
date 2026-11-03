@@ -308,6 +308,14 @@ impl Interp {
                 );
                 Ok(false)
             }
+            // ===== v0.3.7 forelay/无前缀 trans：back 页一次翻上（双页原子转场） =====
+            Command::ForeLay { n, dur_ms, method } => {
+                let dur_ms = if self.trans_enabled { dur_ms } else { 0 };
+                let method = if self.trans_enabled { method } else { "fade".to_string() };
+                let n = n.map(|x| x as usize).unwrap_or(crate::stage::BG_LAYER);
+                self.stage.fore_trans(n, dur_ms, crate::stage::TransMethod::parse(&method))?;
+                Ok(false)
+            }
             Command::WaitTrans => match self.stage.trans_left_ms() {
                 Some(left) => {
                     self.state = RunState::WaitTimer { left_ms: left };

@@ -199,8 +199,24 @@ fn 转场trans与wt解析() {
         }
         _ => panic!(),
     }
-    assert!(cmd("trans", "64 x").is_err());
-    assert!(cmd("trans", "0").is_err());
+    // v0.3.7：首参不是合法层号 → 无前缀形态（64 当 ms、x 当 method）
+    assert!(matches!(cmd("trans", "64 x").unwrap(), Command::ForeLay { n: None, .. }));
+    // v0.3.7：无前缀形态（无层号无素材）= back 页翻上，不再是错误
+    assert!(matches!(cmd("trans", "").unwrap(), Command::ForeLay { n: None, .. }));
+    // 无前缀双参：trans 500 crossfade（第二参纯数字 → ForeLay）；素材名非数字走旧语法
+    match cmd("trans", "500 crossfade").unwrap() {
+        Command::ForeLay { n, dur_ms, method } => {
+            assert_eq!((n, dur_ms, method.as_str()), (None, 500, "crossfade"));
+        }
+        _ => panic!(),
+    }
+    match cmd("trans", "600").unwrap() {
+        Command::ForeLay { n, dur_ms, method } => {
+            assert_eq!((n, dur_ms, method.as_str()), (None, 600, "universal"));
+        }
+        _ => panic!(),
+    }
+    assert!(matches!(cmd("trans", "0 bg/next").unwrap(), Command::Trans { .. }));
     assert!(matches!(cmd("wt", "").unwrap(), Command::WaitTrans));
 }
 

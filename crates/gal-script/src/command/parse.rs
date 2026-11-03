@@ -120,6 +120,25 @@ impl Command {
                 _ => err("layer 用法：layer 层号(5-63) 素材|hide [淡入ms]"),
             },
             "trans" => match tokens.as_slice() {
+                // v0.3.7 无前缀形态（KAG3 trans）：trans [ms|method] —— 把已备好的 back 页
+                // 一次翻上（原子转场）。仅 0/1 参数归 ForeLay（≥2 参数维持旧版
+                // 「trans 层号 素材 …」语法，避免与层号歧义）；双参数形态用 forelay。
+                [] => Ok(Command::ForeLay { n: None, dur_ms: 700, method: "universal".into() }),
+                [ms] if num::<u32>(ms).is_ok() => Ok(Command::ForeLay {
+                    n: None,
+                    dur_ms: num::<u32>(ms)?,
+                    method: "universal".into(),
+                }),
+                [m] => Ok(Command::ForeLay { n: None, dur_ms: 700, method: m.to_string() }),
+                // 双参数消歧：首参不是合法层号（如 500）或第二参是纯数字 → 无前缀
+                // `trans ms method`（如 trans 500 crossfade）；否则旧版「trans 层号 素材」。
+                [a, b] if trans_layer_of(a, ctx).is_err() || num::<u32>(b).is_ok() => {
+                    Ok(Command::ForeLay {
+                        n: None,
+                        dur_ms: num::<u32>(a).unwrap_or(700),
+                        method: b.to_string(),
+                    })
+                }
                 // 形式：trans 层号 素材 [ms] [method]；ms 可省略（默认 700，与 bg/cg 一致）
                 [n, s] => Ok(Command::Trans {
                     n: trans_layer_of(n, ctx)?,
@@ -159,6 +178,23 @@ impl Command {
                 [n, "hide"] => Ok(Command::BackLay { n: Some(layer_num(n, ctx)?), hide: true }),
                 _ => err("backlay 用法：backlay [层号] / backlay [层号] hide"),
             },
+            // ===== v0.3.7 forelay：back 页翻上到 fore 页（KAG3 双页原子转场） =====
+            "forelay" => {
+                let mut n = None;
+                let mut dur_ms = 700;
+                let mut method = "universal".to_string();
+                for t in &tokens {
+                    if let Ok(ms) = num::<u32>(t) {
+                        dur_ms = ms;
+                    } else if n.is_none() && t.parse::<u8>().is_ok() {
+                        // method 名（crossfade/slide-l…）与毫秒都不会撞纯数字层号
+                        n = t.parse::<u8>().ok();
+                    } else {
+                        method = t.to_string();
+                    }
+                }
+                Ok(Command::ForeLay { n, dur_ms, method })
+            }
             "copylay" => match tokens.as_slice() {
                 [f, t] => Ok(Command::CopyLay {
                     from: layer_num(f, ctx)?,
