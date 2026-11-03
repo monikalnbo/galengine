@@ -2,6 +2,36 @@
 
 遵循 [语义化版本](https://semver.org/lang/zh-CN/)。旧 `game.yaml`、旧存档、旧 `savedata/global.json` 均可直接使用。
 
+## v0.3.15 — 2026-11-03
+
+**超链接批**（backlog P1-6 邻近，152 表 #12/#13/#14/#32/#33）：KAG3 `link` / `endlink` /
+`button` / `locklink` / `unlocklink` 共 5 个标签。
+存档格式零改动。旧剧本/旧配置/旧存档零改动兼容（实测验证）。
+
+### 新增（5 个标签）
+
+- `link storage=*标签 / exp=表达式` —— 行内超链接开始：到配对 `endlink` 的文本可点，
+  点击后跳转标签或求值赋值（KAG3 link 子集；`storage`/`exp` 至少一项）。
+- `endlink` —— 行内超链接结束：闭区间成区（无配对/空区间中文报错）。
+- `button graphic=素材 storage=|exp=` —— 图形按钮：image/ 素材整幅可点（水平居中、
+  垂直 3/4 处），悬停微放大提示，点击触发动作；进入 `WaitButton` 等待态，点空白不推进。
+- `locklink` / `unlocklink` —— 链接锁：锁定期链接不可点且绘制置灰，解锁恢复可点。
+
+### 实现
+
+- 链接区间按打字机字符计数定位（换行计 1、ruby 组计 1），随段落 `apply_pending`
+  落地、随段落替换自然清空；`indent` 期间区间随全角缩进右移。
+- 绘制：链接区间逐单元着色（锁定灰 / 激活青），ruby/内嵌图单元同步支持。
+- 命中：`link_rects` 按当前揭示状态逐行算链接矩形，鼠标点击先查链接命中再落普通推进。
+- 无头回归：`auto_step` 补 `WaitButton` 驱动；新增 `link-demo.ks`（jump/exp 双路径 +
+  lock/unlock），14 剧本 ALL_PASS。
+- 测试：170 通过（+10：parse 守卫 / 成区 / 嵌套与空区间报错 / 锁定命中 /
+  activate_link Jump 与 Exp / WaitButton 激活）。
+
+### 152 口径
+
+消息/文本组 20（5 简化）/5/7 → **25（10 简化）/5/2**；总口径 100/21/31 → **105/21/26**。
+
 ## v0.3.14 — 2026-11-03
 
 **文本控制批**（backlog P1-6）：KAG3 `r` / `l` / `p` / `er` / `cm` / `ct` / `indent` /

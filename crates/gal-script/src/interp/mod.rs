@@ -97,6 +97,40 @@ pub struct Interp {
     pub(crate) indent_on: bool,
     /// v0.3.14 瞬时揭示区间（nowait…endnowait）：区间内台词打字机不逐字
     pub(crate) nowait_on: bool,
+    /// v0.3.15 超链接：当前台词内的链接区（起止字符位 + 动作）。随 apply_pending 重建
+    pub links: Vec<LinkRegion>,
+    /// v0.3.15 link…endlink 组装中：Some(起始字符位)（pending_text.length() 口径）
+    pub(crate) link_open_at: Option<usize>,
+    /// v0.3.15 link…endlink 组装中：动作（storage/exp 求值期再定 exp）
+    pub(crate) link_action: Option<LinkAction>,
+    /// v0.3.15 本段已闭区的链接（apply_pending 时按段落偏移平移进 self.links）
+    pub(crate) pending_links: Vec<LinkRegion>,
+    /// v0.3.15 locklink：链接锁（true 时链接不可点）
+    pub links_locked: bool,
+    /// v0.3.15 button：图形按钮等待（资源名 + 动作）
+    pub button: Option<ButtonSpec>,
+}
+
+/// v0.3.15 行内超链接动作（KAG3 link：storage 跳转或 exp 求值）
+#[derive(Debug, PartialEq, Clone)]
+pub enum LinkAction {
+    Jump(String),
+    Exp(String),
+}
+
+/// v0.3.15 行内超链接区：[start, end) 字符区间（含 \u{1e} 计 1 的口径，与打字机一致）
+#[derive(Debug, PartialEq, Clone)]
+pub struct LinkRegion {
+    pub start: usize,
+    pub end: usize,
+    pub action: LinkAction,
+}
+
+/// v0.3.15 图形按钮（KAG3 button 子集）：image/ 下素材，整幅可点
+#[derive(Debug, PartialEq, Clone)]
+pub struct ButtonSpec {
+    pub graphic: String,
+    pub action: LinkAction,
 }
 
 /// v0.3.5 宏调用帧：已代入 %attr 的宏体行（克隆自宏表）+ 体内行游标 + 作用域 id
@@ -150,6 +184,12 @@ impl Interp {
             store_disabled: false,
             indent_on: false,
             nowait_on: false,
+            links: Vec::new(),
+            link_open_at: None,
+            link_action: None,
+            pending_links: Vec::new(),
+            links_locked: false,
+            button: None,
         }
     }
 
@@ -285,6 +325,7 @@ impl Interp {
             // WaitAudio 不在解释器里推进：由引擎轮询音频状态后调 audio_wait_release
             RunState::WaitChoice { .. }
             | RunState::WaitInput(_)
+            | RunState::WaitButton
             | RunState::WaitAudio(_)
             | RunState::Ended => {}
         }
@@ -319,6 +360,43 @@ impl Interp {
             self.run_until_wait()
         } else {
             Ok(())
+        }
+    }
+
+    /// v0.3.15 命中检测：字符位（打字机计数口径）落在哪个链接区；锁定期返回 None
+    pub fn link_at(&self, char_idx: usize) -> Option<&LinkRegion> {
+        if self.links_locked {
+            return None;
+        }
+        self.links.iter().find(|l| char_idx >= l.start && char_idx < l.end)
+    }
+
+    /// v0.3.15 点击链接：执行动作（jump / exp 赋值）并继续推进
+    pub fn activate_link(&mut self, char_idx: usize) -> Result<bool, String> {
+        let Some(region) = self.link_at(char_idx) else { return Ok(false) };
+        let action = region.action.clone();
+        self.links.clear();
+        self.run_link_action(action)?;
+        Ok(true)
+    }
+
+    /// v0.3.15 点击图形按钮：执行动作并继续推进
+    pub fn activate_button(&mut self) -> Result<bool, String> {
+        let Some(b) = self.button.take() else { return Ok(false) };
+        self.run_link_action(b.action)?;
+        Ok(true)
+    }
+
+    fn run_link_action(&mut self, action: LinkAction) -> Result<(), String> {
+        match action {
+            LinkAction::Jump(label) => {
+                self.jump_label(&label)?;
+                self.run_until_wait()
+            }
+            LinkAction::Exp(expr) => {
+                crate::expr::eval_assign(&expr, &mut self.vars)?;
+                self.run_until_wait()
+            }
         }
     }
 

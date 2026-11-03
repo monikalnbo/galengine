@@ -14,6 +14,7 @@ mod saves_test;
 
 pub use auto::auto_step;
 
+use gal_render::assets::TextureBank;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::mouse::MouseButton;
@@ -26,13 +27,15 @@ use gal_text::font::FontBook;
 use gal_ui::savemenu::ThumbCache;
 
 /// 处理一条事件；返回 false=请求退出
+#[allow(clippy::too_many_arguments)]
 pub fn dispatch(
     g: &mut Game,
     ev: Event,
     canvas: &mut Canvas<Window>,
-    _fonts: &mut FontBook,
+    fonts: &mut FontBook,
     renderer: &mut Renderer,
     thumbs: &mut ThumbCache,
+    bank: &mut TextureBank,
 ) -> Result<bool, String> {
     match ev {
         Event::Quit { .. } => Ok(false),
@@ -53,10 +56,14 @@ pub fn dispatch(
             Ok(true)
         }
 
-        Event::MouseMotion { x, y, .. } if !g.overlay.active() && g.choice_len() > 0 => {
+        Event::MouseMotion { x, y, .. } if !g.overlay.active() => {
             let (lx, ly) = Renderer::to_logical(canvas, x, y);
-            if let Some(i) = gal_ui::choice::hit_test(g.choice_len(), &g.conf.ui.choice, lx, ly) {
-                g.choice_sel = i;
+            g.mouse_logical = (lx, ly);
+            if g.choice_len() > 0 {
+                if let Some(i) = gal_ui::choice::hit_test(g.choice_len(), &g.conf.ui.choice, lx, ly)
+                {
+                    g.choice_sel = i;
+                }
             }
             Ok(true)
         }
@@ -64,7 +71,7 @@ pub fn dispatch(
         Event::MouseButtonDown { mouse_btn: MouseButton::Left, x, y, .. } => {
             g.cursor.set_click();
             let (lx, ly) = Renderer::to_logical(canvas, x, y);
-            mouse::click(g, lx, ly, canvas, renderer, thumbs)
+            mouse::click(g, lx, ly, canvas, renderer, thumbs, fonts, bank)
         }
         Event::MouseButtonUp { mouse_btn: MouseButton::Left, .. } => {
             g.cursor.set_default();

@@ -453,6 +453,42 @@ impl Command {
                 Ok(Command::RubyTag { text, alt })
             }
             "hch" if !rest.trim().is_empty() => Ok(Command::Hch { text: rest.trim().to_string() }),
+            // v0.3.15 超链接族：link / endlink / button / locklink / unlocklink
+            "link" => {
+                let mut storage = None;
+                let mut exp = None;
+                for (k, v) in parse_attrs(rest) {
+                    match k.as_str() {
+                        "storage" => storage = Some(v),
+                        "exp" => exp = Some(v),
+                        _ => {}
+                    }
+                }
+                if storage.is_none() && exp.is_none() {
+                    return err("link 用法：link storage=*标签 或 link exp=表达式");
+                }
+                Ok(Command::Link { storage, exp })
+            }
+            "endlink" if rest.trim().is_empty() => Ok(Command::EndLink),
+            "button" => {
+                let mut graphic = String::new();
+                let mut storage = None;
+                let mut exp = None;
+                for (k, v) in parse_attrs(rest) {
+                    match k.as_str() {
+                        "graphic" => graphic = v,
+                        "storage" => storage = Some(v),
+                        "exp" => exp = Some(v),
+                        _ => {}
+                    }
+                }
+                if graphic.is_empty() || (storage.is_none() && exp.is_none()) {
+                    return err("button 用法：button graphic=素材 storage=*标签（或 exp=表达式）");
+                }
+                Ok(Command::Button { graphic, storage, exp })
+            }
+            "locklink" if rest.trim().is_empty() => Ok(Command::LockLink),
+            "unlocklink" if rest.trim().is_empty() => Ok(Command::UnLockLink),
             "font" | "deffont" => {
                 let (size, color) = font_attrs(rest);
                 match name {

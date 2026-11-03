@@ -15,6 +15,14 @@ use gal_text::writer::Typewriter;
 /// 对话框样式（数据层在 gal-config::style，断行与绘制共用）
 pub use gal_config::DialogStyle;
 
+/// v0.3.15 超链接绘制参数：链接区（打字机字符口径）+ 锁定标记
+pub struct LinkDraw<'a> {
+    pub regions: &'a [(usize, usize)],
+    pub locked: bool,
+    /// 当前显示字符数（cur_line 之前的行全显；当前行 shown）
+    pub revealed: usize,
+}
+
 /// 揭示前缀裁剪：按「已显字符数」取可见单元；最后一单元可能只露一部分
 fn visible_prefix(units: &[Unit], shown: usize) -> Vec<&Unit> {
     let mut out = Vec::new();
@@ -81,6 +89,97 @@ fn draw_units(
     Ok(cx)
 }
 
+/// v0.3.15 绘制带逐单元着色的段（链接高亮/变灰用）
+fn draw_units_colored(
+    canvas: &mut Canvas<Window>,
+    fonts: &mut FontBook,
+    bank: &mut TextureBank,
+    segs: &[(Unit, Color)],
+    x: i32,
+    y: i32,
+    style: &DialogStyle,
+) -> Result<(), String> {
+    let o = style.outline as i32;
+    let shadow = (style.shadow_offset != [0, 0]).then(|| {
+        let [r, g, b] = style.shadow_color;
+        (Color::RGB(r, g, b), style.shadow_offset)
+    });
+    let mut cx = x;
+    for (u, col) in segs {
+        match u {
+            Unit::Ch(c) => {
+                let s = c.to_string();
+                draw_piece(canvas, fonts, &s, cx, y, o, style.font_size, *col, shadow)?;
+                cx += fonts.text_width(style.font_size, &s) as i32;
+            }
+            Unit::Ruby(base, ruby) => {
+                let bw = fonts.text_width(style.font_size, base) as i32;
+                let rw = fonts.text_width(style.ruby_size, ruby) as i32;
+                let w = bw.max(rw);
+                if !ruby.is_empty() {
+                    let rx = cx + (w - rw) / 2;
+                    let ry = y - (style.ruby_size as i32) + 2;
+                    draw_piece(canvas, fonts, ruby, rx, ry, o, style.ruby_size, *col, shadow)?;
+                }
+                let bx = cx + (w - bw) / 2;
+                draw_piece(canvas, fonts, base, bx, y, o, style.font_size, *col, shadow)?;
+                cx += w;
+            }
+            Unit::Image(name) => {
+                let line_h = style.font_size as u32;
+                if let Some(dst) = image_rect(bank, name, cx, y, line_h) {
+                    bank.draw_scaled(canvas, &dst_path(name), dst, 1.0)?;
+                }
+                cx += line_h.max(4) as i32;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// v0.3.15 链接命中矩形收集：返回 (矩形, 字符位)；按当前揭示状态逐行算链接单元落位（逻辑坐标）
+pub fn link_rects(
+    fonts: &mut FontBook,
+    style: &DialogStyle,
+    tw: &Typewriter,
+    regions: &[(usize, usize)],
+) -> Vec<(sdl2::rect::Rect, usize)> {
+    let (cur_line, cur_chars) = tw.reveal_pos();
+    let line_h = fonts.line_h_spaced(style.font_size, style.line_spacing);
+    let o = style.outline as i32;
+    let mut rects = Vec::new();
+    let mut char_base = 0usize;
+    for (i, line) in tw.current_units().iter().enumerate() {
+        if i > cur_line || line.is_empty() {
+            break;
+        }
+        let shown =
+            if i < cur_line { line.iter().map(Unit::chars).sum::<usize>() } else { cur_chars };
+        let mut cx = style.text_x - o;
+        let y = style.text_y + i as i32 * line_h - o;
+        let mut c = char_base;
+        for u in line {
+            let n = u.chars().max(1);
+            let w = match u {
+                Unit::Ch(ch) => fonts.text_width(style.font_size, &ch.to_string()) as i32,
+                Unit::Ruby(base, ruby) => {
+                    let bw = fonts.text_width(style.font_size, base) as i32;
+                    let rw = fonts.text_width(style.ruby_size, ruby) as i32;
+                    bw.max(rw)
+                }
+                Unit::Image(_) => style.font_size as i32,
+            };
+            if c < shown && regions.iter().any(|(s, e)| c + n > *s && c < *e) {
+                rects.push((sdl2::rect::Rect::new(cx, y, w.max(4) as u32, line_h as u32), c));
+            }
+            cx += w;
+            c += n;
+        }
+        char_base += line.iter().map(Unit::chars).sum::<usize>() + 1;
+    }
+    rects
+}
+
 /// 内嵌图素材路径（gal-config::paths 的 image kind）与按行高等比的落位矩形
 fn dst_path(name: &str) -> String {
     gal_config::paths::resolve("image", name)
@@ -130,6 +229,7 @@ pub fn draw(
     name: Option<&str>,
     tw: &Typewriter,
     now_ms: f32,
+    link_draw: Option<&LinkDraw<'_>>,
 ) -> Result<(), String> {
     canvas.set_blend_mode(BlendMode::Blend);
 
@@ -175,6 +275,8 @@ pub fn draw(
     let text_color = Color::RGB(tr, tg, tb);
     let read_color = style.read_color.map(|[r, g, b]| Color::RGB(r, g, b));
     let o = style.outline as i32;
+    // v0.3.15 链接全局字符游标（打字机口径：换行计 1、ruby 组计 1）
+    let mut char_base = 0usize;
     for (i, line) in tw.current_units().iter().enumerate() {
         if i > cur_line || line.is_empty() {
             break;
@@ -193,7 +295,31 @@ pub fn draw(
             _ => text_color,
         };
         let visible: Vec<Unit> = visible.into_iter().cloned().collect();
+        // v0.3.15 链接：区间内单元按链接色画（锁定=灰，未锁=高亮青）
+        if let Some(ld) = link_draw {
+            let mut segs: Vec<(Unit, Color)> = Vec::new();
+            let mut c = char_base;
+            for u in &visible {
+                let n = u.chars().max(1);
+                let in_link = ld.regions.iter().any(|(s, e)| c + n > *s && c < *e);
+                let col = if in_link {
+                    if ld.locked {
+                        Color::RGB(120, 124, 134)
+                    } else {
+                        Color::RGB(96, 200, 255)
+                    }
+                } else {
+                    color
+                };
+                segs.push((u.clone(), col));
+                c += n;
+            }
+            draw_units_colored(canvas, fonts, bank, &segs, x, y, style)?;
+            char_base += line.iter().map(Unit::chars).sum::<usize>() + 1;
+            continue;
+        }
         draw_units(canvas, fonts, bank, &visible, x, y, style, color)?;
+        char_base += line.iter().map(Unit::chars).sum::<usize>() + 1;
     }
 
     // 页满指示：右下角「▼」呼吸（作者可关）

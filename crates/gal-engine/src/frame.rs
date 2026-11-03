@@ -12,7 +12,9 @@ use gal_render::renderer::Renderer;
 use gal_script::interp::RunState;
 use gal_text::font::FontBook;
 use gal_ui::overlay::{esc_items, Overlay};
-use gal_ui::{bottombar, choice, dialog, gallery, inputbox, menu, ritual, savemenu, title};
+use gal_ui::{
+    bottombar, choice, dialog, gallery, inputbox, menu, ritual, savemenu, textbutton, title,
+};
 
 /// 帧附加输入：视频层所需（`video` feature 关闭时仅作透传占位）
 pub struct FrameExt<'a> {
@@ -132,8 +134,34 @@ pub fn frame(
                             inputbox::draw(tc, fonts, ui, &g.conf)?;
                         }
                     }
+                    RunState::WaitButton => {
+                        // v0.3.15 图形按钮（悬停态按鼠标逻辑坐标；无头环境 (0,0)=不悬停）
+                        let graphic =
+                            g.interp.button.as_ref().map(|b| b.graphic.clone()).unwrap_or_default();
+                        let (mx, my) = g.mouse_logical;
+                        let hover = textbutton::hit(bank, &graphic, mx, my);
+                        textbutton::draw(tc, bank, &graphic, hover)?;
+                        bottombar::draw(tc, fonts, &g.conf.ui.bottombar, &skin, auto, g.ctrl_hold)?;
+                    }
                     _ => {
-                        dialog::draw(tc, fonts, bank, style, name.as_deref(), &g.interp.tw, now)?;
+                        // v0.3.15 行内链接：有链接区时逐单元换色绘制
+                        let link_regions: Vec<(usize, usize)> =
+                            g.interp.links.iter().map(|l| (l.start, l.end)).collect();
+                        let link_draw = (!link_regions.is_empty()).then(|| dialog::LinkDraw {
+                            regions: &link_regions,
+                            locked: g.interp.links_locked,
+                            revealed: 0,
+                        });
+                        dialog::draw(
+                            tc,
+                            fonts,
+                            bank,
+                            style,
+                            name.as_deref(),
+                            &g.interp.tw,
+                            now,
+                            link_draw.as_ref(),
+                        )?;
                         bottombar::draw(tc, fonts, &g.conf.ui.bottombar, &skin, auto, g.ctrl_hold)?;
                     }
                 }

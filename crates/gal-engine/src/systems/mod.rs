@@ -43,6 +43,8 @@ pub struct Game {
     /// 玩家当前皮肤（sf.skinIndex → ui.skin 列表）
     pub skin: gal_config::SkinCfg,
     pub now_ms: f32,
+    /// v0.3.15 鼠标逻辑坐标（链接/按钮悬停与命中用；无头环境保持 (0,0)）
+    pub mouse_logical: (f32, f32),
     /// 字色/字号/行距变化后需重建排版（下一帧生效）
     pub style_dirty: bool,
     /// 自动存档计时（save.auto_save_ms；0=关闭）
@@ -221,6 +223,7 @@ impl Game {
             langs,
             conf,
             now_ms: 0.0,
+            mouse_logical: (0.0, 0.0),
         }
     }
 

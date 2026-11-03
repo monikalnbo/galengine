@@ -162,6 +162,8 @@ pub enum RunState {
         items: Vec<(String, String)>,
     },
     WaitInput(Box<InputSpec>),
+    /// v0.3.15 button：图形按钮等待（点击命中后触发动作）
+    WaitButton,
     /// v0.3.2 音频等待（wb/wl/ws/wf）：记录等待开始时间，引擎轮询音频状态决定放行
     WaitAudio(AudioWait),
     Ended,

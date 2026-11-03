@@ -890,3 +890,155 @@ fn v0314_缩进与nowait在待显时生效() {
     let indented = if it.indent_on { format!("\u{3000}\u{3000}{text}") } else { text };
     assert_eq!(indented, "\u{3000}\u{3000}缩进段");
 }
+
+// ---------- v0.3.15 超链接族 ----------
+
+#[test]
+fn v0315_link_endlink成区并随段落生效() {
+    let mut it = interp();
+    // link：记录起始字符位（pending 空 → 0）
+    it.exec(Command::Link { storage: Some("go".into()), exp: None }, "t:1").unwrap();
+    assert_eq!(it.link_open_at, Some(0));
+    // 文本拼接（模拟 hch）
+    it.exec(Command::Hch { text: "点我".into() }, "t:2").unwrap();
+    // endlink：闭区 → pending_links 有区间 [0,2)
+    it.exec(Command::EndLink, "t:3").unwrap();
+    assert_eq!(it.link_open_at, None);
+    assert_eq!(it.pending_links.len(), 1);
+    assert_eq!((it.pending_links[0].start, it.pending_links[0].end), (0, 2));
+    // apply_pending 前自.link 为空；模拟段落落地由 history 层测（见下方间接验证）
+}
+
+#[test]
+fn v0315_link无storage与exp报错在解析层() {
+    // exec 层 storage/exp 双空走 unreachable（parse 已守卫）；解析层验证用法报错
+    let e = crate::command::Command::parse(
+        &crate::lexer::LineKind::Command { name: "link".into(), rest: "".into() },
+        "t:1",
+    )
+    .unwrap_err();
+    assert!(e.contains("link 用法"), "{e}");
+}
+
+#[test]
+fn v0315_endlink无配对报错() {
+    let mut it = interp();
+    let e = it.exec(Command::EndLink, "t:1").unwrap_err();
+    assert!(e.contains("endlink"), "{e}");
+}
+
+#[test]
+fn v0315_link嵌套报错() {
+    let mut it = interp();
+    it.exec(Command::Link { storage: Some("a".into()), exp: None }, "t:1").unwrap();
+    let e = it.exec(Command::Link { storage: Some("b".into()), exp: None }, "t:2").unwrap_err();
+    assert!(e.contains("嵌套"), "{e}");
+}
+
+#[test]
+fn v0315_endlink空区间报错() {
+    let mut it = interp();
+    it.exec(Command::Link { storage: Some("a".into()), exp: None }, "t:1").unwrap();
+    let e = it.exec(Command::EndLink, "t:2").unwrap_err();
+    assert!(e.contains("没有文本"), "{e}");
+}
+
+#[test]
+fn v0315_locklink锁定后链接不可点() {
+    let mut it = interp();
+    it.links =
+        vec![super::LinkRegion { start: 0, end: 2, action: super::LinkAction::Jump("x".into()) }];
+    // 未锁：命中
+    assert!(it.link_at(0).is_some());
+    // 锁定：link_at 返回 None
+    it.exec(Command::LockLink, "t:1").unwrap();
+    assert!(it.links_locked);
+    assert!(it.link_at(0).is_none());
+    // 解锁：恢复
+    it.exec(Command::UnLockLink, "t:2").unwrap();
+    assert!(!it.links_locked);
+    assert!(it.link_at(1).is_some());
+    // 区间外：None
+    assert!(it.link_at(5).is_none());
+}
+
+#[test]
+fn v0315_activate_link_jump与清空() {
+    let mut it = interp();
+    it.scripts.insert(
+        "lk.ks".into(),
+        crate::lexer::parse_script("*target\nn 到了\n*start\nn 起点\n").unwrap(),
+    );
+    it.labels.insert(("lk.ks".into(), "target".into()), 0);
+    it.labels.insert(("lk.ks".into(), "start".into()), 2);
+    it.start("lk.ks", None).unwrap();
+    it.links = vec![super::LinkRegion {
+        start: 0,
+        end: 2,
+        action: super::LinkAction::Jump("target".into()),
+    }];
+    let hit = it.activate_link(1).unwrap();
+    assert!(hit);
+    assert!(it.links.is_empty()); // 点击后清空
+                                  // 跳转成功：停在 *target 台词等待
+    assert_eq!(it.state, RunState::WaitClick); // 停在 *target 台词等待（文本由 apply_pending 落地，需字体环境）
+}
+
+#[test]
+fn v0315_activate_link_exp求值() {
+    let mut it = interp();
+    it.scripts
+        .insert("lk2.ks".into(), crate::lexer::parse_script("*start\nn 起点\nn 加完\n").unwrap());
+    it.start("lk2.ks", None).unwrap();
+    it.links = vec![super::LinkRegion {
+        start: 0,
+        end: 2,
+        action: super::LinkAction::Exp("f.gold = 100".into()),
+    }];
+    it.activate_link(0).unwrap();
+    assert_eq!(it.vars.get("f.gold"), Some(&crate::vars::Value::Int(100)));
+}
+
+#[test]
+fn v0315_button进入等待态并可激活() {
+    let mut it = interp();
+    it.scripts.insert(
+        "btn.ks".into(),
+        crate::lexer::parse_script("*gonn\nn 按下了\n*start\nn 起点\n").unwrap(),
+    );
+    it.labels.insert(("btn.ks".into(), "gonn".into()), 0);
+    it.labels.insert(("btn.ks".into(), "start".into()), 2);
+    it.start("btn.ks", None).unwrap();
+    // 先推进到 *start 的台词等待
+    assert_eq!(it.state, RunState::WaitClick);
+    it.exec(
+        Command::Button { graphic: "btn_start".into(), storage: Some("*gonn".into()), exp: None },
+        "t:1",
+    )
+    .unwrap();
+    assert_eq!(it.state, RunState::WaitButton);
+    assert!(it.button.is_some());
+    // 激活：take 按钮 + jump 到 *gonn
+    let hit = it.activate_button().unwrap();
+    assert!(hit);
+    assert!(it.button.is_none());
+    assert_eq!(it.state, RunState::WaitClick); // 停在 *gonn 台词等待
+                                               // 再激活：Ok(false)
+    assert!(!it.activate_button().unwrap());
+}
+
+#[test]
+fn v0315_button缺graphic报错在解析层() {
+    // 解析层守卫在 parse.rs 测过口径：这里验证 exec 前提——graphic 必非空（parse 保证）
+    let mut it = interp();
+    it.button = Some(super::ButtonSpec {
+        graphic: String::new(),
+        action: super::LinkAction::Exp("f.ok = 1".into()),
+    });
+    it.state = RunState::WaitButton;
+    it.scripts
+        .insert("btn2.ks".into(), crate::lexer::parse_script("*start\nn 起点\nn 之后\n").unwrap());
+    it.start("btn2.ks", None).unwrap();
+    it.activate_button().unwrap(); // 空 graphic 也照常触发（绘制层缺文件跳过）
+    assert_eq!(it.vars.get("f.ok"), Some(&crate::vars::Value::Int(1)));
+}

@@ -104,6 +104,7 @@ pub fn auto_step(
             let v = g.input_ui.as_ref().map(|ui| ui.value()).unwrap_or_default();
             g.interp.input_result(v)
         }
+        RunState::WaitButton => g.interp.activate_button().map(|_| ()), // v0.3.15 无头驱动：按钮=点它
         _ => Ok(()),
     }
 }

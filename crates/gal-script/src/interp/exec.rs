@@ -2,6 +2,7 @@
 
 use super::types::{AudioWait, InputSpec, RunState, SysEvent};
 use super::Interp;
+use super::{ButtonSpec, LinkAction, LinkRegion};
 use crate::command::Command;
 use crate::vars::{Value, Vars};
 use gal_config::paths::resolve;
@@ -654,6 +655,57 @@ impl Interp {
             Command::EndNoWait => {
                 self.nowait_on = false;
                 Ok(false)
+            }
+            Command::Link { storage, exp } => {
+                // v0.3.15 KAG3 link：行内超链接开始。记录起始字符位与动作，
+                // endlink 时按当前 pending 长度闭区间成区
+                if self.link_open_at.is_some() {
+                    return Err("link 嵌套：上一组 link 未 endlink".into());
+                }
+                self.link_open_at =
+                    Some(self.pending_text.as_ref().map(|t| t.chars().count()).unwrap_or(0));
+                self.link_action = Some(match (storage, exp) {
+                    (Some(s), _) => LinkAction::Jump(s),
+                    (_, Some(e)) => LinkAction::Exp(e),
+                    _ => unreachable!("parse 已保证 storage/exp 至少一项"),
+                });
+                Ok(false)
+            }
+            Command::EndLink => {
+                // v0.3.15 endlink：闭区间成区（区间随 apply_pending 落到 self.links）
+                match (self.link_open_at.take(), self.link_action.take()) {
+                    (Some(start), Some(action)) => {
+                        let end =
+                            self.pending_text.as_ref().map(|t| t.chars().count()).unwrap_or(0);
+                        if end <= start {
+                            return Err("endlink：link 与 endlink 之间没有文本".into());
+                        }
+                        self.pending_links.push(LinkRegion { start, end, action });
+                    }
+                    _ => return Err("endlink：没有配对的 link".into()),
+                }
+                Ok(false)
+            }
+            Command::LockLink => {
+                self.links_locked = true;
+                Ok(false)
+            }
+            Command::UnLockLink => {
+                self.links_locked = false;
+                Ok(false)
+            }
+            Command::Button { graphic, storage, exp } => {
+                // v0.3.15 KAG3 button：图形按钮等待态（image/ 素材整幅可点）
+                self.tw.clear();
+                self.cur_name = None;
+                let action = match (storage, exp) {
+                    (Some(s), _) => LinkAction::Jump(s),
+                    (_, Some(e)) => LinkAction::Exp(e),
+                    _ => unreachable!("parse 已保证 storage/exp 至少一项"),
+                };
+                self.button = Some(ButtonSpec { graphic, action });
+                self.state = RunState::WaitButton;
+                Ok(true)
             }
             Command::Else => {
                 let else_at = self.pc - 1;

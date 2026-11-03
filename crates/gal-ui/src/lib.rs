@@ -12,5 +12,6 @@ pub mod restui;
 pub mod ritual;
 pub mod savemenu;
 pub mod settings;
+pub mod textbutton;
 pub mod title;
 pub mod widgets;

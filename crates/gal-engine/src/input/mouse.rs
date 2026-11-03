@@ -4,13 +4,16 @@ use sdl2::render::Canvas;
 use sdl2::video::Window;
 
 use crate::systems::Game;
+use gal_render::assets::TextureBank;
 use gal_render::renderer::Renderer;
+use gal_text::font::FontBook;
 use gal_ui::overlay::{esc_items, title_items, Overlay};
 use gal_ui::savemenu::{self, ThumbCache};
 use gal_ui::{choice, menu};
 
 use super::{activate, saves, settings_io};
 
+#[allow(clippy::too_many_arguments)]
 pub fn click(
     g: &mut Game,
     lx: f32,
@@ -18,6 +21,8 @@ pub fn click(
     canvas: &mut Canvas<Window>,
     renderer: &mut Renderer,
     thumbs: &mut ThumbCache,
+    fonts: &mut FontBook,
+    bank: &mut TextureBank,
 ) -> Result<bool, String> {
     if g.hide_ui {
         g.hide_ui = false;
@@ -137,7 +142,32 @@ pub fn click(
                 None => {}
             }
         }
-        gal_script::interp::RunState::WaitClick => g.interp.click()?,
+        gal_script::interp::RunState::WaitButton => {
+            // v0.3.15 图形按钮：未命中不推进（点空白不吃输入）
+            let graphic = g.interp.button.as_ref().map(|b| b.graphic.clone()).unwrap_or_default();
+            if gal_ui::textbutton::hit(bank, &graphic, lx, ly) {
+                g.interp.activate_button()?;
+            }
+        }
+        gal_script::interp::RunState::WaitClick => {
+            // v0.3.15 行内链接优先：命中链接矩形触发动作，否则普通推进
+            let regions: Vec<(usize, usize)> =
+                g.interp.links.iter().map(|l| (l.start, l.end)).collect();
+            let hit_char = if regions.is_empty() || g.interp.links_locked {
+                None
+            } else {
+                gal_ui::dialog::link_rects(fonts, &g.style, &g.interp.tw, &regions)
+                    .into_iter()
+                    .find(|(r, _)| r.contains_point((lx as i32, ly as i32)))
+                    .map(|(_, c)| c)
+            };
+            match hit_char {
+                Some(c) => {
+                    g.interp.activate_link(c)?;
+                }
+                None => g.interp.click()?,
+            }
+        }
         _ => {}
     }
     Ok(true)

@@ -121,6 +121,7 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
                 &mut fonts,
                 &mut renderer,
                 &mut thumbs,
+                &mut bank,
             )? {
                 break 'running;
             }

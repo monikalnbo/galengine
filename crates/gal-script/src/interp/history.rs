@@ -24,7 +24,15 @@ impl Interp {
             // v0.3.14 段落缩进（indent…endindent）：整段前插全角空两格
             if self.indent_on {
                 text = format!("\u{3000}\u{3000}{text}");
+                // v0.3.15 链接区间随缩进前缀右移
+                let k = 2;
+                for l in &mut self.pending_links {
+                    l.start += k;
+                    l.end += k;
+                }
             }
+            // v0.3.15 链接区归属本段：本段显示时生效，段落替换时自然清空
+            self.links = std::mem::take(&mut self.pending_links);
             self.cur_raw = text.clone();
             let text = self.localize(&text);
             self.last_text = text.chars().take(18).collect();

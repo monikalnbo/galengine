@@ -327,6 +327,23 @@ pub enum Command {
     Hch {
         text: String,
     },
+    /// v0.3.15 `link [storage=*|exp=]`：行内超链接开始（到配对 endlink 的文本可点；
+    /// 点击后 jump storage 或求值 exp，KAG3 link 子集）
+    Link {
+        storage: Option<String>,
+        exp: Option<String>,
+    },
+    /// v0.3.15 `endlink`：行内超链接结束
+    EndLink,
+    /// v0.3.15 `button graphic=… storage=…`：图形按钮（进入按钮等待态；KAG3 button 子集）
+    Button {
+        graphic: String,
+        storage: Option<String>,
+        exp: Option<String>,
+    },
+    /// v0.3.15 `locklink` / `unlocklink`：链接禁用/恢复（锁定期链接不可点，视觉变灰）
+    LockLink,
+    UnLockLink,
     /// v0.3.13 `font size= n color=…`：行内文字属性（记录 + DEBUG 留证，演出零变化）
     Font {
         size: Option<u16>,
