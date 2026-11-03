@@ -36,6 +36,8 @@ pub struct DialogStyle {
     pub ruby_size: u16,
     /// 已读文字色（None = 不区分已读）
     pub read_color: Option<[u8; 3]>,
+    /// v0.3.17 页满标记素材名（Some = 用 image/ 图替代「▼」；None = 内置三角）
+    pub glyph: Option<String>,
 }
 
 impl DialogStyle {
@@ -73,6 +75,7 @@ impl DialogStyle {
             wait_marker: text.wait_marker,
             ruby_size: text.ruby_size(font_size),
             read_color: text.read_color,
+            glyph: None,
         }
     }
 

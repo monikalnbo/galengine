@@ -562,6 +562,11 @@ impl Command {
                 }
                 Ok(Command::Current { layer })
             }
+            // v0.3.17 KAG3 glyph：页满标记素材（token 式单参数）
+            "glyph" => match tokens.as_slice() {
+                [s] => Ok(Command::Glyph { storage: s.to_string() }),
+                _ => err("glyph 用法：glyph 素材名"),
+            },
             "nowait" if rest.trim().is_empty() => Ok(Command::NoWait),
             "endnowait" if rest.trim().is_empty() => Ok(Command::EndNoWait),
             "call" => match tokens.as_slice() {

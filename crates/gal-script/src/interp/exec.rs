@@ -682,6 +682,11 @@ impl Interp {
                 );
                 Ok(false)
             }
+            Command::Glyph { storage } => {
+                // v0.3.17：写 sf.msgGlyph，compose_style 对账 → DialogStyle.glyph → draw 页满贴图
+                self.vars.set("sf.msgGlyph", Value::Str(storage.clone()));
+                Ok(false)
+            }
             Command::NoWait => {
                 self.nowait_on = true;
                 Ok(false)

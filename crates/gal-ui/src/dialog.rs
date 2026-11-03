@@ -322,15 +322,31 @@ pub fn draw(
         char_base += line.iter().map(Unit::chars).sum::<usize>() + 1;
     }
 
-    // 页满指示：右下角「▼」呼吸（作者可关）
+    // 页满指示：右下角呼吸（作者可关）；glyph 指定素材时贴图替代内置「▼」（v0.3.17）
     if tw.page_full() && style.wait_marker {
         let a = (140.0 + 100.0 * (now_ms / 400.0).sin()) as u8;
-        canvas.set_draw_color(Color::RGBA(255, 255, 255, a));
-        let bx = br.right() - 34;
-        let by = br.bottom() - 26;
-        for dy in 0..8i32 {
-            let half = (8 - dy) as u32;
-            canvas.fill_rect(Rect::new(bx - (half / 2) as i32 + 4, by + dy - 8, half.max(1), 1))?;
+        if let Some(g) = &style.glyph {
+            let path = gal_config::paths::resolve("image", g);
+            bank.draw_full_alpha_offset(
+                canvas,
+                &path,
+                f32::from(a) / 255.0,
+                br.right() - 40,
+                br.bottom() - 32,
+            )?;
+        } else {
+            canvas.set_draw_color(Color::RGBA(255, 255, 255, a));
+            let bx = br.right() - 34;
+            let by = br.bottom() - 26;
+            for dy in 0..8i32 {
+                let half = (8 - dy) as u32;
+                canvas.fill_rect(Rect::new(
+                    bx - (half / 2) as i32 + 4,
+                    by + dy - 8,
+                    half.max(1),
+                    1,
+                ))?;
+            }
         }
     }
     Ok(())

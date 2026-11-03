@@ -188,6 +188,11 @@ pub fn compose_style(
     if let Some(v) = msg("Opacity") {
         style.fill[3] = v.clamp(0, 255) as u8;
     }
+    // v0.3.17 glyph 标签（脚本写 sf.msgGlyph）：页满标记素材（空串 = 清除回落内置「▼」）
+    if let Some(v) = vars.sf.get("msgGlyph") {
+        let s = v.as_str().trim().to_string();
+        style.glyph = (!s.is_empty()).then_some(s);
+    }
     style
 }
 

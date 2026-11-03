@@ -1124,3 +1124,30 @@ fn v0316_current解析与执行不炸() {
     let mut it = interp();
     it.exec(crate::command::Command::Current { layer: Some("message0".into()) }, "t").unwrap();
 }
+
+// ===== v0.3.17 glyph 页满标记图形 =====
+
+#[test]
+fn v0317_glyph解析与执行写sf标记变量() {
+    let c = crate::command::Command::parse(
+        &crate::lexer::LineKind::Command { name: "glyph".into(), rest: "marker".into() },
+        "t:1",
+    )
+    .unwrap();
+    let crate::command::Command::Glyph { storage } = c else { panic!("应为 Glyph") };
+    assert_eq!(storage, "marker");
+    // 无参报错
+    let e = crate::command::Command::parse(
+        &crate::lexer::LineKind::Command { name: "glyph".into(), rest: "".into() },
+        "t:2",
+    )
+    .unwrap_err();
+    assert!(e.contains("glyph 用法"), "{e}");
+    // 执行写 sf.msgGlyph
+    let mut it = interp();
+    it.exec(crate::command::Command::Glyph { storage: "waiticon".into() }, "t").unwrap();
+    assert_eq!(it.vars.get("sf.msgGlyph"), Some(&crate::vars::Value::Str("waiticon".into())));
+    // 再执行覆盖
+    it.exec(crate::command::Command::Glyph { storage: "other".into() }, "t").unwrap();
+    assert_eq!(it.vars.get("sf.msgGlyph"), Some(&crate::vars::Value::Str("other".into())));
+}

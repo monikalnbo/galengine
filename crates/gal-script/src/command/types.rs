@@ -396,6 +396,11 @@ pub enum Command {
     Current {
         layer: Option<String>,
     },
+    /// v0.3.17 `glyph 素材名`：页满标记图形（KAG3 glyph 子集；写 sf.msgGlyph，
+    /// dialog::draw 页满时用 image/ 素材替代内置「▼」）
+    Glyph {
+        storage: String,
+    },
     /// v0.3.14 `nowait` / `endnowait`：区间打字机瞬时揭示
     NoWait,
     EndNoWait,

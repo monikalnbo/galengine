@@ -2,6 +2,24 @@
 
 遵循 [语义化版本](https://semver.org/lang/zh-CN/)。旧 `game.yaml`、旧存档、旧 `savedata/global.json` 均可直接使用。
 
+## v0.3.17 — 2026-11-03
+
+**消息层批收尾**（152 表 #31）：KAG3 `glyph` 页满标记图形，1 个标签。
+存档格式零改动（`sf.msgGlyph` 为新增键，旧档缺省回落内置「▼」，实测验证）。
+
+### 新增（1 个标签）
+
+- `glyph 素材名` —— 页满标记图形：页满等待时右下角用 `image/` 素材替代内置「▼」三角
+  （KAG3 glyph 子集；呼吸透明度同步；token 式单参数，无参中文报错）。
+
+### 实现
+
+- `Command::Glyph` 写 `sf.msgGlyph`（Str），`compose_style` 对账 → `DialogStyle.glyph`
+  纯数据字段（空串 = 清除回落内置三角）→ `dialog::draw` 页满分支贴图（`draw_full_alpha_offset`）。
+- 测试：175 通过（+1：parse/无参报错/执行写变量/覆盖）。新增 `glyph-demo.ks`，
+  16 剧本无头回归 ALL_PASS；旧存档零改动兼容实测。
+- 152 口径更新：**108 / 18 / 26**（+1 别名）。
+
 ## v0.3.16 — 2026-11-03
 
 **消息层批**（backlog §6 优先项，152 表 #20/#21）：KAG3 `position` / `current` 共 2 个标签。
