@@ -422,3 +422,28 @@ fn v039条件标签收尾_解析() {
     assert!(cmd("animstart", "5").is_err());
     assert!(cmd("animstart", "5 a b").is_err());
 }
+
+#[test]
+fn v0311演出等待收尾_解析() {
+    // quake [ms] [maxamp]（KAG3 口径：缺省 300ms）
+    assert!(matches!(cmd("quake", "").unwrap(), Command::Quake { ms: 300, max_amp: 14 }));
+    assert!(matches!(cmd("quake", "600").unwrap(), Command::Quake { ms: 600, max_amp: 14 }));
+    assert!(matches!(cmd("quake", "500 20").unwrap(), Command::Quake { ms: 500, max_amp: 20 }));
+    assert!(cmd("quake", "x").is_err());
+    // stopquake / wq / wc / resetwait（无参指令）
+    assert!(matches!(cmd("stopquake", "").unwrap(), Command::StopQuake));
+    assert!(matches!(cmd("wq", "").unwrap(), Command::WaitQuake));
+    assert!(matches!(cmd("wc", "").unwrap(), Command::WaitClickCount));
+    assert!(matches!(cmd("resetwait", "").unwrap(), Command::ResetWait));
+    assert!(cmd("wq", "1").is_err());
+    // locksnapshot [名] / unlocksnapshot
+    assert!(matches!(
+        cmd("locksnapshot", "封印中").unwrap(),
+        Command::LockSnapshot { name } if name == "封印中"
+    ));
+    assert!(matches!(
+        cmd("locksnapshot", "").unwrap(),
+        Command::LockSnapshot { name } if name.is_empty()
+    ));
+    assert!(matches!(cmd("unlocksnapshot", "").unwrap(), Command::UnlockSnapshot));
+}

@@ -2,6 +2,24 @@
 
 遵循 [语义化版本](https://semver.org/lang/zh-CN/)。旧 `game.yaml`、旧存档、旧 `savedata/global.json` 均可直接使用。
 
+## v0.3.11 — 2026-11-03
+
+**演出等待收尾批**（backlog P2-3）：KAG3 `quake` 族（quake/stopquake/wq）+ `wc` / `resetwait` / `locksnapshot` / `unlocksnapshot`。
+存档格式零改动。旧剧本/旧配置/旧存档零改动兼容（实测验证）。
+
+### 新增（7 个标签）
+
+- `quake [ms] [最大幅度]`：画面震动（缺省 300ms / 幅度 14；与既有 shake 同一衰减包络通道）。
+- `stopquake`：中止在途震动；`wq`：等震动结束（无震动立即放行；引擎按 shake 态轮询）。
+- `wc`：等点击一次（KAG3 waitclick 计数形态，本引擎按一次点击口径）。
+- `resetwait`：取消当前强制等待（wait/wq）立即放行后续行；无等待态时静默。
+- `locksnapshot [名]` / `unlocksnapshot`：存档指纹锁——存档/读档界面标题旁显示「🔒 名」标记（运行期状态，不进存档）。
+
+### 兼容性
+
+- 存档快照结构零改动；`quake` 族复用既有 `ShakeSt` 通道，`window_fx shake`/`shake` 旧写法不变。
+- 旧剧本（v0.3.2~v0.3.10 全时代）十剧本全量无头回归 ALL_PASS。
+
 ## v0.3.10 — 2026-11-03
 
 **动画档批**（backlog P2-2）：`animstart 层 档名` + `data/asd/*.asd` 多属性关键帧时间轴。

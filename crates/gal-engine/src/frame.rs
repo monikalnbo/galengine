@@ -245,6 +245,7 @@ fn draw_overlay(
                 &g.sys.meta.corrupt,
                 *mode_save,
                 *sel,
+                g.interp.snapshot_lock.as_deref(),
             )?;
         }
         Overlay::Gallery { sel, page, full } => {

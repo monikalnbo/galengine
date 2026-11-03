@@ -89,6 +89,8 @@ pub struct Interp {
     pub error: Option<String>,
     /// 是否启用 trans 转场（玩家 sf.transOn；L1 每帧注入）
     pub trans_enabled: bool,
+    /// v0.3.11 存档指纹锁（locksnapshot）：Some(名) 时存档界面显示锁定标记
+    pub snapshot_lock: Option<String>,
 }
 
 /// v0.3.5 宏调用帧：已代入 %attr 的宏体行（克隆自宏表）+ 体内行游标 + 作用域 id
@@ -138,6 +140,7 @@ impl Interp {
             backlog: Vec::new(),
             error: None,
             trans_enabled: true,
+            snapshot_lock: None,
         }
     }
 

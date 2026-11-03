@@ -113,6 +113,27 @@ pub enum Command {
     WaitVideo,
     /// wp：等全部声音（BGM/SE/语音）播完
     WaitAllSound,
+    // ===== v0.3.11 演出等待收尾（quake 族 + wc/resetwait + 存档指纹锁）=====
+    /// quake [ms] [maxamp]：画面震动（KAG3 口径：maxamp 幅度本引擎固定包络）
+    Quake {
+        ms: u32,
+        max_amp: u32,
+    },
+    /// stopquake：中止在途震动
+    StopQuake,
+    /// wq：等在途震动结束（无震动立即放行）
+    WaitQuake,
+    /// wc：等点击一次（KAG3 waitclick 的计数形态；本引擎按一次点击口径）
+    WaitClickCount,
+    /// resetwait：取消当前强制等待（wait/wq/wc）立即放行后续行
+    ResetWait,
+    /// locksnapshot [名]：锁定当前存档指纹（存档界面显示锁定标记）
+    LockSnapshot {
+        name: String,
+    },
+    /// unlocksnapshot：解除存档指纹锁
+    UnlockSnapshot,
+
     // ===== v0.3.8 KAG3 视频标签组（引擎侧未开 `video` feature 时 WARN 放行）=====
     /// video 底层参数设置（KAG3 #115，本引擎收下参数但仅 DEBUG 留证）
     Video {

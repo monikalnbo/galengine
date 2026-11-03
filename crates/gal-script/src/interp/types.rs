@@ -79,6 +79,14 @@ pub enum SysEvent {
     },
     ReachHide,
     Shake(u32),
+    // ===== v0.3.11 quake 族 =====
+    /// quake ms maxamp：画面震动（maxamp 留证；包络固定）
+    Quake {
+        ms: u32,
+        max_amp: u32,
+    },
+    /// stopquake：中止在途震动
+    StopQuake,
     /// 立绘左右摇晃：层 / 次数 / 单周期ms
     CharSway {
         layer: u8,
@@ -155,6 +163,8 @@ pub enum AudioWait {
     VideoDone,
     /// wp（v0.3.3）：全部声音（BGM/SE/语音）播完
     AllDone,
+    /// wq（v0.3.11）：画面震动结束（无声卡口径下由引擎按 shake 态轮询放行）
+    QuakeDone,
 }
 
 /// 输入框配置规格

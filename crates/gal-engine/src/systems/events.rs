@@ -97,6 +97,18 @@ impl Game {
             SysEvent::Shake(ms) => {
                 self.sys.shake = Some(ShakeSt { left_ms: ms as f32, dur_ms: ms as f32 });
             }
+            // v0.3.11 quake 族：与 window_fx shake 同一包络通道（maxamp 留证于 DEBUG）
+            SysEvent::Quake { ms, max_amp } => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    &format!("[quake] ms={ms} maxamp={max_amp}（幅度固定包络）"),
+                );
+                self.sys.shake = Some(ShakeSt { left_ms: ms as f32, dur_ms: ms as f32 });
+            }
+            SysEvent::StopQuake => {
+                self.sys.shake = None;
+            }
             SysEvent::SetTitle(t) => {
                 let _ = canvas.window_mut().set_title(&t);
             }

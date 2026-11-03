@@ -1,6 +1,6 @@
 //! interp 单元测试
 
-use super::Interp;
+use super::{Interp, SysEvent};
 use crate::command::Command;
 use crate::vars::Vars;
 use gal_config::sprites::SpritePos;
@@ -712,4 +712,43 @@ fn v0310_animstart执行与等待() {
     it.stage.tick(300.0);
     assert!(it.stage.anims.is_empty());
     assert_eq!(it.stage.layers[5].offset, (30, 0));
+}
+
+#[test]
+fn v0311_quake族与wc_resetwait执行() {
+    let mut it = interp();
+    // quake → Quake 事件
+    it.exec(Command::Quake { ms: 500, max_amp: 20 }, "t:1").unwrap();
+    assert!(matches!(it.events.as_slice(), [SysEvent::Quake { ms: 500, max_amp: 20 }]));
+    // wq → 等 QuakeDone（引擎按 shake 态放行）
+    it.exec(Command::WaitQuake, "t:2").unwrap();
+    assert!(matches!(it.state, RunState::WaitAudio(crate::interp::AudioWait::QuakeDone)));
+    // stopquake → StopQuake 事件
+    it.events.clear();
+    it.exec(Command::StopQuake, "t:3").unwrap();
+    assert!(matches!(it.events.as_slice(), [SysEvent::StopQuake]));
+    // wc → 进入点击等待态
+    it.exec(Command::WaitClickCount, "t:4").unwrap();
+    assert_eq!(it.state, RunState::WaitClick);
+    // resetwait：无等待态时静默
+    it.exec(Command::ResetWait, "t:5").unwrap();
+    assert_eq!(it.state, RunState::WaitClick);
+    // locksnapshot / unlocksnapshot
+    it.exec(Command::LockSnapshot { name: "封印".into() }, "t:6").unwrap();
+    assert_eq!(it.snapshot_lock.as_deref(), Some("封印"));
+    it.exec(Command::UnlockSnapshot, "t:7").unwrap();
+    assert!(it.snapshot_lock.is_none());
+}
+
+#[test]
+fn v0311_resetwait取消强制等待() {
+    let mut it = interp();
+    it.scripts.insert("rw.ks".into(), crate::lexer::parse_script("wait 5000\nn 之后\n").unwrap());
+    it.start("rw.ks", None).unwrap();
+    assert!(matches!(it.state, RunState::WaitTimer { .. }));
+    assert!(matches!(it.state, RunState::WaitTimer { .. }));
+    it.exec(Command::ResetWait, "t:2").unwrap();
+    // 强制等待被取消，解释器继续推进到下一个等待点（台词行挂起）
+    assert_eq!(it.state, RunState::WaitClick);
+    assert_eq!(it.pending_text.as_deref(), Some("之后"));
 }

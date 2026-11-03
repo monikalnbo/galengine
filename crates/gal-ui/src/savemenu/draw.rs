@@ -28,6 +28,7 @@ pub fn draw(
     corrupt: &[usize],
     mode_save: bool,
     sel: usize,
+    locked: Option<&str>,
 ) -> Result<(), String> {
     canvas.set_blend_mode(BlendMode::Blend);
     canvas.set_draw_color(Color::RGBA(4, 6, 16, 225));
@@ -37,6 +38,18 @@ pub fn draw(
     let tex = fonts.render_text(BIG, Color::RGB(230, 234, 244), title)?;
     let q = tex.query();
     canvas.copy(tex, None, Some(Rect::new(76, 60, q.width, q.height)))?;
+    // v0.3.11 locksnapshot：指纹锁标记（标题行右侧）
+    if let Some(name) = locked {
+        if !name.is_empty() {
+            let lt = fonts.render_text(FONT, Color::RGB(255, 200, 120), &format!("🔒 {name}"))?;
+            let lq = lt.query();
+            canvas.copy(
+                lt,
+                None,
+                Some(Rect::new(76 + q.width as i32 + 24, 68, lq.width, lq.height)),
+            )?;
+        }
+    }
 
     for (i, (slot, e)) in entries.iter().enumerate() {
         let r = cell_rect(i);

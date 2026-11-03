@@ -195,6 +195,7 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
                             AudioWait::MusicDone => !a.bgm_playing(),
                             AudioWait::VideoDone => !a.video_playing(),
                             AudioWait::AllDone => !a.any_playing(),
+                            AudioWait::QuakeDone => g.sys.shake.is_none(),
                         }
                 }
             };
@@ -208,6 +209,7 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
                     AudioWait::MusicDone => !a.bgm_playing(),
                     AudioWait::VideoDone => !a.video_playing(),
                     AudioWait::AllDone => !a.any_playing(),
+                    AudioWait::QuakeDone => g.sys.shake.is_none(),
                 };
             if ok {
                 g.interp.audio_wait_release()?;

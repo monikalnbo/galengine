@@ -677,6 +677,38 @@ impl Interp {
                 self.events.push(SysEvent::Shake(ms));
                 Ok(false)
             }
+            Command::Quake { ms, max_amp } => {
+                // KAG3 quake：本引擎幅度固定包络（帧侧衰减），max_amp 记录进事件留证
+                self.events.push(SysEvent::Quake { ms, max_amp });
+                Ok(false)
+            }
+            Command::StopQuake => {
+                self.events.push(SysEvent::StopQuake);
+                Ok(false)
+            }
+            Command::WaitQuake => {
+                self.state = RunState::WaitAudio(crate::interp::AudioWait::QuakeDone);
+                Ok(true)
+            }
+            Command::WaitClickCount => {
+                self.state = RunState::WaitClick;
+                Ok(true)
+            }
+            Command::ResetWait => {
+                // KAG3 resetwait：取消当前强制等待（wait/wq 等）立即放行
+                if matches!(self.state, RunState::WaitTimer { .. }) {
+                    self.run_until_wait()?;
+                }
+                Ok(false)
+            }
+            Command::LockSnapshot { name } => {
+                self.snapshot_lock = Some(name);
+                Ok(false)
+            }
+            Command::UnlockSnapshot => {
+                self.snapshot_lock = None;
+                Ok(false)
+            }
             Command::WindowFxTitle(t) => {
                 // 系统级框也要支持 {hero}/{you} 替换
                 self.events.push(SysEvent::SetTitle(self.replace_names(&t)));

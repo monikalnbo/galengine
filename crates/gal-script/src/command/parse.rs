@@ -502,6 +502,20 @@ impl Command {
                 _ => err("reach 用法：reach 素材 [ms] [倍率] / reach hide"),
             },
             // 顶层 `shake ms`：与 `window_fx shake ms` 同义的短写（演示剧本与 KAG 迁移稿常见）
+            // v0.3.11 KAG3 quake 族：quake [ms] [maxamp] / stopquake / wq
+            "quake" => match tokens.as_slice() {
+                [] => Ok(Command::Quake { ms: 300, max_amp: 14 }),
+                [ms] => Ok(Command::Quake { ms: num(ms)?, max_amp: 14 }),
+                [ms, amp] => Ok(Command::Quake { ms: num(ms)?, max_amp: num(amp)? }),
+                _ => err("quake 用法：quake [ms] [最大幅度]"),
+            },
+            "stopquake" if tokens.is_empty() => Ok(Command::StopQuake),
+            "wq" if tokens.is_empty() => Ok(Command::WaitQuake),
+            // v0.3.11 wc / resetwait / locksnapshot / unlocksnapshot
+            "wc" if tokens.is_empty() => Ok(Command::WaitClickCount),
+            "resetwait" if tokens.is_empty() => Ok(Command::ResetWait),
+            "locksnapshot" => Ok(Command::LockSnapshot { name: rest.trim().to_string() }),
+            "unlocksnapshot" if tokens.is_empty() => Ok(Command::UnlockSnapshot),
             "shake" => match tokens.as_slice() {
                 [ms] => Ok(Command::WindowFxShake(num(ms)?)),
                 // `shake 幅度 毫秒`（KAG3 迁移稿常见）：幅度当前固定，取时长
