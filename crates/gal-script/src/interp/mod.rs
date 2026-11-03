@@ -91,6 +91,8 @@ pub struct Interp {
     pub trans_enabled: bool,
     /// v0.3.11 存档指纹锁（locksnapshot）：Some(名) 时存档界面显示锁定标记
     pub snapshot_lock: Option<String>,
+    /// v0.3.12 禁存标记（disablestore）：true 时引擎侧拒绝存档动作
+    pub store_disabled: bool,
 }
 
 /// v0.3.5 宏调用帧：已代入 %attr 的宏体行（克隆自宏表）+ 体内行游标 + 作用域 id
@@ -141,6 +143,7 @@ impl Interp {
             error: None,
             trans_enabled: true,
             snapshot_lock: None,
+            store_disabled: false,
         }
     }
 

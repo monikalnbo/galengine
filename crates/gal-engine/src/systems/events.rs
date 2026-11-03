@@ -97,6 +97,72 @@ impl Game {
             SysEvent::Shake(ms) => {
                 self.sys.shake = Some(ShakeSt { left_ms: ms as f32, dur_ms: ms as f32 });
             }
+            // ===== v0.3.12 存档控制标签事件 =====
+            SysEvent::StopSkip => {
+                self.auto = false;
+                self.ctrl_hold = false;
+            }
+            SysEvent::TempSave => match crate::input::saves::script_temp_save(self) {
+                Ok(()) => {}
+                Err(e) => gal_audio::log::log(
+                    gal_audio::log::Level::Warn,
+                    "script",
+                    &format!("[tempsave] 失败：{e}"),
+                ),
+            },
+            SysEvent::TempLoad => {
+                if let Err(e) = crate::input::saves::script_temp_load(self) {
+                    gal_audio::log::log(
+                        gal_audio::log::Level::Debug,
+                        "script",
+                        &format!("[tempload] 无临时存档或失败：{e}"),
+                    );
+                }
+            }
+            SysEvent::CopyBookmark { from, to } => {
+                if let Err(e) = gal_save::slots::copy_slot(&self.sys.save_dir, from, to) {
+                    gal_audio::log::log(
+                        gal_audio::log::Level::Warn,
+                        "script",
+                        &format!("[copybookmark] {from}→{to} 失败：{e}"),
+                    );
+                }
+                self.refresh_saves();
+            }
+            SysEvent::EraseBookmark { slot } => {
+                let path = gal_save::slots::slot_path(&self.sys.save_dir, slot);
+                match std::fs::remove_file(&path) {
+                    Ok(()) => gal_audio::log::log(
+                        gal_audio::log::Level::Info,
+                        "script",
+                        &format!("[erasebookmark] 已删除槽 {slot}"),
+                    ),
+                    Err(e) => gal_audio::log::log(
+                        gal_audio::log::Level::Debug,
+                        "script",
+                        &format!("[erasebookmark] 槽 {slot} 删除跳过：{e}"),
+                    ),
+                }
+                self.refresh_saves();
+            }
+            SysEvent::OpenGallery => {
+                self.overlay = Overlay::Gallery { sel: 0, page: 0, full: None };
+            }
+            SysEvent::GoBack => {
+                // goback：读最近槽位（无档 WARN 留证不崩）
+                if let Some(slot) =
+                    gal_save::slots::latest_slot(&self.sys.save_dir, self.sys.slots.max(1))
+                {
+                    crate::input::saves::do_load(self, slot);
+                } else {
+                    gal_audio::log::log(
+                        gal_audio::log::Level::Warn,
+                        "script",
+                        "[goback] 无任何存档可回退（演出继续）",
+                    );
+                }
+            }
+
             // v0.3.11 quake 族：与 window_fx shake 同一包络通道（maxamp 留证于 DEBUG）
             SysEvent::Quake { ms, max_amp } => {
                 gal_audio::log::log(

@@ -196,6 +196,10 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
                             AudioWait::VideoDone => !a.video_playing(),
                             AudioWait::AllDone => !a.any_playing(),
                             AudioWait::QuakeDone => g.sys.shake.is_none(),
+                            AudioWait::Trig(k) => {
+                                g.interp.vars.get(&format!("f.{k}")).map(gal_script::expr::truthy)
+                                    == Some(true)
+                            }
                         }
                 }
             };
@@ -210,6 +214,10 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
                     AudioWait::VideoDone => !a.video_playing(),
                     AudioWait::AllDone => !a.any_playing(),
                     AudioWait::QuakeDone => g.sys.shake.is_none(),
+                    AudioWait::Trig(k) => {
+                        g.interp.vars.get(&format!("f.{k}")).map(gal_script::expr::truthy)
+                            == Some(true)
+                    }
                 };
             if ok {
                 g.interp.audio_wait_release()?;

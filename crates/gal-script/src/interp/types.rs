@@ -79,6 +79,27 @@ pub enum SysEvent {
     },
     ReachHide,
     Shake(u32),
+    // ===== v0.3.12 存档控制标签事件 =====
+    /// s：停止快进/自动
+    StopSkip,
+    /// tempsave：写临时存档（引擎落 savedata/temp.json）
+    TempSave,
+    /// tempload：读临时存档
+    TempLoad,
+    /// copybookmark from to：复制存档槽
+    CopyBookmark {
+        from: usize,
+        to: usize,
+    },
+    /// erasebookmark slot：删除存档槽
+    EraseBookmark {
+        slot: usize,
+    },
+    /// record：打开鉴赏模式
+    OpenGallery,
+    /// goback：读最近存档槽
+    GoBack,
+
     // ===== v0.3.11 quake 族 =====
     /// quake ms maxamp：画面震动（maxamp 留证；包络固定）
     Quake {
@@ -165,6 +186,8 @@ pub enum AudioWait {
     AllDone,
     /// wq（v0.3.11）：画面震动结束（无声卡口径下由引擎按 shake 态轮询放行）
     QuakeDone,
+    /// waittrig（v0.3.12）：等触发器（键 = f.trig_<名>）
+    Trig(String),
 }
 
 /// 输入框配置规格

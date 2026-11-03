@@ -2,6 +2,28 @@
 
 遵循 [语义化版本](https://semver.org/lang/zh-CN/)。旧 `game.yaml`、旧存档、旧 `savedata/global.json` 均可直接使用。
 
+## v0.3.12 — 2026-11-03
+
+**存档控制标签批**（backlog #52/54/58/59/60/61/62/64/65）：KAG3 `s` / `disablestore` / `tempsave` / `tempload` / `copybookmark` / `erasebookmark` / `record` / `goback` / `waittrig`。
+存档格式零改动。旧剧本/旧配置/旧存档零改动兼容（实测验证）。
+
+### 新增（9 个标签）
+
+- `s`：停止快进/自动播放（KAG3 口径，经引擎态翻转）。
+- `disablestore [t/f]`：禁用/恢复存档（缺省 true；生效期 can_save 拦截，存档界面保存被拒）。
+- `tempsave`：写临时存档 `{save_dir}/temp.json`（结构同普通存档、缩略图留空，不占玩家槽位、存档界面不可见；不可存档态 WARN 留证）。
+- `tempload`：读临时存档恢复（含 BGM 随档恢复；无档 DEBUG 留证不崩）。
+- `copybookmark 源 目标`：槽位整档复制（源空 → 中文 WARN 留证）。
+- `erasebookmark 槽号`：删指定槽位（空槽 DEBUG 留证；删后存档列表即刷新）。
+- `record`：打开回顾（CG 鉴赏）界面（`Overlay::Gallery`）。
+- `goback`：读最近槽位回退（无任何存档 WARN 留证不崩）。
+- `waittrig 名`：等触发器 `f.trig_<名>` 为真；已置位立即放行，引擎轮询 truthy。
+
+### 兼容性
+
+- 存档快照结构零改动；`temp.json` 是新文件不进槽位体系；`can_save` 新增禁存检查（未 disablestore 的旧剧本行为不变）。
+- 旧剧本（v0.3.2~v0.3.11 全时代）十剧本全量无头回归 ALL_PASS。
+
 ## v0.3.11 — 2026-11-03
 
 **演出等待收尾批**（backlog P2-3）：KAG3 `quake` 族（quake/stopquake/wq）+ `wc` / `resetwait` / `locksnapshot` / `unlocksnapshot`。

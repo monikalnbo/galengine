@@ -63,6 +63,34 @@ pub fn load(dir: &str, slot: usize) -> Option<SaveEntry> {
     serde_json::from_str(&text).ok()
 }
 
+/// 复制槽位（copybookmark）：from 槽原样拷到 to 槽（时间戳保留源档）；from 空 → 中文错误
+pub fn copy_slot(dir: &str, from: usize, to: usize) -> Result<(), String> {
+    let mut entry = load(dir, from).ok_or(format!("存档槽 {from} 是空的，无法复制"))?;
+    entry.slot = to;
+    save(dir, &entry)
+}
+
+/// 临时存档文件路径（tempsave/tempload 专用，不占玩家槽位、存档界面不可见）
+pub fn temp_path(save_dir: &str) -> String {
+    format!("{save_dir}/temp.json")
+}
+
+/// 写临时存档（tempsave）：结构同普通存档，缩略图留空（界面不可见无需图）
+pub fn save_temp(dir: &str, entry: &SaveEntry) -> Result<(), String> {
+    let mut e = entry.clone();
+    e.slot = 0;
+    e.thumb = Vec::new();
+    std::fs::create_dir_all(dir).map_err(|e| format!("创建存档目录失败：{dir}（{e}）"))?;
+    let text = serde_json::to_string(&e).map_err(|e| format!("存档序列化失败：{e}"))?;
+    std::fs::write(temp_path(dir), text).map_err(|e| format!("临时存档写入失败（{e}）"))
+}
+
+/// 读临时存档（tempload）：无临时存档 → None
+pub fn load_temp(dir: &str) -> Option<SaveEntry> {
+    let text = std::fs::read_to_string(temp_path(dir)).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
 /// 读档校验：指纹不符返回中文错误（规格 §2.4）
 pub fn load_checked(dir: &str, slot: usize, data_dir: &str) -> Result<SaveEntry, String> {
     let e = load(dir, slot).ok_or(format!("存档槽 {slot} 是空的"))?;

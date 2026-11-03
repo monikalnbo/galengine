@@ -62,8 +62,10 @@ impl Game {
         }
     }
 
-    /// 台词态是否可存档（等待点=对话行）
+    /// 台词态是否可存档（等待点=对话行；disablestore 生效期禁止）
     pub fn can_save(&self) -> bool {
-        self.interp.state == RunState::WaitClick && self.interp.resume_point().is_some()
+        !self.interp.store_disabled
+            && self.interp.state == RunState::WaitClick
+            && self.interp.resume_point().is_some()
     }
 }

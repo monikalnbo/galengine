@@ -134,6 +134,35 @@ pub enum Command {
     /// unlocksnapshot：解除存档指纹锁
     UnlockSnapshot,
 
+    // ===== v0.3.12 存档控制标签批 =====
+    /// s：停止快进/自动（KAG3 `s`；在跳过态调用即停）
+    StopSkip,
+    /// disablestore [t/f]：禁用/恢复存档（KAG3 口径；运行期状态）
+    DisableStore {
+        on: bool,
+    },
+    /// tempsave [名]：写临时存档（当前时刻场景，不占正式槽位；本引擎落 savedata/temp.json）
+    TempSave,
+    /// tempload：读临时存档（无则静默 DEBUG 留证）
+    TempLoad,
+    /// copybookmark 源 目标：复制存档槽
+    CopyBookmark {
+        from: usize,
+        to: usize,
+    },
+    /// erasebookmark 槽：删除存档槽
+    EraseBookmark {
+        slot: usize,
+    },
+    /// record：打开鉴赏模式（CG 回廊）
+    Record,
+    /// goback：回到前一个存档点（本引擎口径=读最近槽位）
+    GoBack,
+    /// waittrig 名：等触发器（本引擎以 f.trig_<名> 置 1 为触发口径；轮询）
+    WaitTrig {
+        name: String,
+    },
+
     // ===== v0.3.8 KAG3 视频标签组（引擎侧未开 `video` feature 时 WARN 放行）=====
     /// video 底层参数设置（KAG3 #115，本引擎收下参数但仅 DEBUG 留证）
     Video {

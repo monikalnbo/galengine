@@ -91,6 +91,50 @@ pub fn autosave(
     }
 }
 
+/// tempsave：写临时存档（结构同普通存档，缩略图留空；不占玩家槽位）
+pub fn script_temp_save(g: &mut Game) -> Result<(), String> {
+    if !g.can_save() {
+        return Err("现在无法存档。".into());
+    }
+    let (file, line) = g.interp.resume_point().expect("can_save 已保证");
+    let entry = gal_save::slots::SaveEntry {
+        slot: 0,
+        title: g.interp.last_text.clone(),
+        stamp: gal_save::slots::now_stamp(),
+        fingerprint: gal_save::slots::fingerprint(&format!(
+            "{}/scenario/{file}",
+            config::data_dir()
+        )),
+        file,
+        line,
+        fvars: g.interp.vars.f.clone(),
+        snap: g.interp.stage.snapshot(),
+        bgm: g.interp.cur_bgm.clone(),
+        thumb: Vec::new(),
+    };
+    gal_save::slots::save_temp(&g.sys.save_dir, &entry)
+}
+
+/// tempload：读临时存档并恢复（无档 → Err；恢复口径与 do_load 一致）
+pub fn script_temp_load(g: &mut Game) -> Result<(), String> {
+    let e = gal_save::slots::load_temp(&g.sys.save_dir).ok_or("临时存档不存在")?;
+    let res = g.interp.restore(&e.file, e.line, e.snap, e.fvars);
+    match res {
+        Ok(()) => {
+            match &e.bgm {
+                Some(name) => g.sys.audio.play_bgm(name),
+                None => g.sys.audio.stop_bgm(),
+            }
+            g.interp.cur_bgm = e.bgm.clone();
+            g.auto = false;
+            g.started = true;
+            g.msg("已读取：临时存档");
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
 /// 读档执行（指纹校验 + 演出层快照恢复）
 pub fn do_load(g: &mut Game, slot: usize) {
     match gal_save::slots::load_checked(&g.sys.save_dir, slot, &config::data_dir()) {

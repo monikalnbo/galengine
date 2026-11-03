@@ -709,6 +709,49 @@ impl Interp {
                 self.snapshot_lock = None;
                 Ok(false)
             }
+            // ===== v0.3.12 存档控制标签批 =====
+            Command::StopSkip => {
+                // KAG3 `s`：停止快进/自动（引擎态经由 SysEvent 通道翻转）
+                self.events.push(SysEvent::StopSkip);
+                Ok(false)
+            }
+            Command::DisableStore { on } => {
+                self.store_disabled = on;
+                Ok(false)
+            }
+            Command::TempSave => {
+                self.events.push(SysEvent::TempSave);
+                Ok(false)
+            }
+            Command::TempLoad => {
+                self.events.push(SysEvent::TempLoad);
+                Ok(false)
+            }
+            Command::CopyBookmark { from, to } => {
+                self.events.push(SysEvent::CopyBookmark { from, to });
+                Ok(false)
+            }
+            Command::EraseBookmark { slot } => {
+                self.events.push(SysEvent::EraseBookmark { slot });
+                Ok(false)
+            }
+            Command::Record => {
+                self.events.push(SysEvent::OpenGallery);
+                Ok(false)
+            }
+            Command::GoBack => {
+                self.events.push(SysEvent::GoBack);
+                Ok(false)
+            }
+            Command::WaitTrig { name } => {
+                // 触发器口径：f.trig_<名> 为真即放行（已置位立即通过）
+                let key = format!("trig_{name}");
+                let hit = self.vars.get(&format!("f.{key}")).map(crate::expr::truthy);
+                if hit != Some(true) {
+                    self.state = RunState::WaitAudio(crate::interp::AudioWait::Trig(key));
+                }
+                Ok(true)
+            }
             Command::WindowFxTitle(t) => {
                 // 系统级框也要支持 {hero}/{you} 替换
                 self.events.push(SysEvent::SetTitle(self.replace_names(&t)));

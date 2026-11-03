@@ -752,3 +752,55 @@ fn v0311_resetwait取消强制等待() {
     assert_eq!(it.state, RunState::WaitClick);
     assert_eq!(it.pending_text.as_deref(), Some("之后"));
 }
+
+#[test]
+fn v0312_存档控制标签执行() {
+    let mut it = interp();
+    // s → StopSkip 事件
+    it.exec(Command::StopSkip, "t:1").unwrap();
+    assert!(matches!(it.events.as_slice(), [SysEvent::StopSkip]));
+    // disablestore 翻转
+    it.exec(Command::DisableStore { on: true }, "t:2").unwrap();
+    assert!(it.store_disabled);
+    it.exec(Command::DisableStore { on: false }, "t:3").unwrap();
+    assert!(!it.store_disabled);
+    // tempsave/tempload/copybookmark/erasebookmark/record/goback → 对应事件
+    it.events.clear();
+    it.exec(Command::TempSave, "t:4").unwrap();
+    assert!(matches!(it.events.as_slice(), [SysEvent::TempSave]));
+    it.events.clear();
+    it.exec(Command::TempLoad, "t:5").unwrap();
+    assert!(matches!(it.events.as_slice(), [SysEvent::TempLoad]));
+    it.events.clear();
+    it.exec(Command::CopyBookmark { from: 1, to: 3 }, "t:6").unwrap();
+    assert!(matches!(it.events.as_slice(), [SysEvent::CopyBookmark { from: 1, to: 3 }]));
+    it.events.clear();
+    it.exec(Command::EraseBookmark { slot: 2 }, "t:7").unwrap();
+    assert!(matches!(it.events.as_slice(), [SysEvent::EraseBookmark { slot: 2 }]));
+    it.events.clear();
+    it.exec(Command::Record, "t:8").unwrap();
+    assert!(matches!(it.events.as_slice(), [SysEvent::OpenGallery]));
+    it.events.clear();
+    it.exec(Command::GoBack, "t:9").unwrap();
+    assert!(matches!(it.events.as_slice(), [SysEvent::GoBack]));
+}
+
+#[test]
+fn v0312_waittrig等待与放行() {
+    let mut it = interp();
+    it.scripts.insert("wt.ks".into(), crate::lexer::parse_script("n 结束\n").unwrap());
+    it.start("wt.ks", None).unwrap();
+    // 未置位 → 进入 Trig 等待
+    it.exec(Command::WaitTrig { name: "open2".into() }, "t:1").unwrap();
+    assert!(
+        matches!(it.state, RunState::WaitAudio(crate::interp::AudioWait::Trig(ref k)) if k == "trig_open2")
+    );
+    // 已置位 → 引擎轮询放行（truthy 为真即 audio_wait_release），推进到台词行
+    it.vars.set("f.trig_open2", crate::vars::Value::Int(1));
+    it.audio_wait_release().unwrap();
+    assert_eq!(it.state, RunState::Ended);
+    // 台词已被消费（剧本走完）
+    // 已置位再调 → 立即通过不等待（状态不再变化，无二次挂起）
+    it.exec(Command::WaitTrig { name: "open2".into() }, "t:2").unwrap();
+    assert_eq!(it.state, RunState::Ended);
+}

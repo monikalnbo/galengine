@@ -447,3 +447,35 @@ fn v0311演出等待收尾_解析() {
     ));
     assert!(matches!(cmd("unlocksnapshot", "").unwrap(), Command::UnlockSnapshot));
 }
+
+#[test]
+fn v0312存档控制标签_解析() {
+    // s（无参）
+    assert!(matches!(cmd("s", "").unwrap(), Command::StopSkip));
+    // disablestore [t/f]（缺省 true）
+    assert!(matches!(cmd("disablestore", "").unwrap(), Command::DisableStore { on: true }));
+    assert!(matches!(cmd("disablestore", "false").unwrap(), Command::DisableStore { on: false }));
+    assert!(matches!(cmd("disablestore", "f").unwrap(), Command::DisableStore { on: false }));
+    assert!(cmd("disablestore", "maybe").is_err());
+    // tempsave / tempload / record / goback（无参）
+    assert!(matches!(cmd("tempsave", "").unwrap(), Command::TempSave));
+    assert!(matches!(cmd("tempload", "").unwrap(), Command::TempLoad));
+    assert!(matches!(cmd("record", "").unwrap(), Command::Record));
+    assert!(matches!(cmd("goback", "").unwrap(), Command::GoBack));
+    // copybookmark 源 目标
+    assert!(matches!(
+        cmd("copybookmark", "1 3").unwrap(),
+        Command::CopyBookmark { from: 1, to: 3 }
+    ));
+    assert!(cmd("copybookmark", "1").is_err());
+    assert!(cmd("copybookmark", "1 x").is_err());
+    // erasebookmark 槽号
+    assert!(matches!(cmd("erasebookmark", "2").unwrap(), Command::EraseBookmark { slot: 2 }));
+    assert!(cmd("erasebookmark", "").is_err());
+    // waittrig 名
+    assert!(matches!(
+        cmd("waittrig", "open").unwrap(),
+        Command::WaitTrig { name } if name == "open"
+    ));
+    assert!(cmd("waittrig", "").is_err());
+}

@@ -514,6 +514,30 @@ impl Command {
             // v0.3.11 wc / resetwait / locksnapshot / unlocksnapshot
             "wc" if tokens.is_empty() => Ok(Command::WaitClickCount),
             "resetwait" if tokens.is_empty() => Ok(Command::ResetWait),
+            // v0.3.12 存档控制标签批
+            "s" if tokens.is_empty() => Ok(Command::StopSkip),
+            "disablestore" => match tokens.as_slice() {
+                [] => Ok(Command::DisableStore { on: true }),
+                ["true"] | ["t"] => Ok(Command::DisableStore { on: true }),
+                ["false"] | ["f"] => Ok(Command::DisableStore { on: false }),
+                _ => err("disablestore 用法：disablestore [true|false]（缺省 true）"),
+            },
+            "tempsave" if tokens.is_empty() => Ok(Command::TempSave),
+            "tempload" if tokens.is_empty() => Ok(Command::TempLoad),
+            "copybookmark" => match tokens.as_slice() {
+                [f, t] => Ok(Command::CopyBookmark { from: num(f)?, to: num(t)? }),
+                _ => err("copybookmark 用法：copybookmark 源槽 目标槽"),
+            },
+            "erasebookmark" => match tokens.as_slice() {
+                [sl] => Ok(Command::EraseBookmark { slot: num(sl)? }),
+                _ => err("erasebookmark 用法：erasebookmark 槽号"),
+            },
+            "record" if tokens.is_empty() => Ok(Command::Record),
+            "goback" if tokens.is_empty() => Ok(Command::GoBack),
+            "waittrig" => match tokens.as_slice() {
+                [n] => Ok(Command::WaitTrig { name: n.to_string() }),
+                _ => err("waittrig 用法：waittrig 触发器名"),
+            },
             "locksnapshot" => Ok(Command::LockSnapshot { name: rest.trim().to_string() }),
             "unlocksnapshot" if tokens.is_empty() => Ok(Command::UnlockSnapshot),
             "shake" => match tokens.as_slice() {

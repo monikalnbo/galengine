@@ -86,3 +86,40 @@ fn 时间戳格式() {
     assert_eq!(unix_to_stamp(0), "1970-01-01 00:00");
     assert_eq!(unix_to_stamp(1725609600), "2024-09-06 08:00");
 }
+
+#[test]
+fn v0312_copy_slot与临时存档往返() {
+    let dir = std::env::temp_dir().join(format!("gal0312s_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let entry = SaveEntry {
+        slot: 1,
+        title: "测试".into(),
+        stamp: now_stamp(),
+        file: "a.ks".into(),
+        line: 3,
+        fvars: Default::default(),
+        snap: Default::default(),
+        bgm: None,
+        fingerprint: 42,
+        thumb: vec![1, 2, 3],
+    };
+    let d = dir.to_str().unwrap();
+    save(d, &entry).unwrap();
+    // copy_slot：1→3，源不变、目标 slot 号改写
+    copy_slot(d, 1, 3).unwrap();
+    let e3 = load(d, 3).unwrap();
+    assert_eq!(e3.slot, 3);
+    assert_eq!(e3.title, "测试");
+    assert_eq!(e3.fingerprint, 42);
+    // from 空 → 中文错误
+    let err = copy_slot(d, 9, 2).unwrap_err();
+    assert!(err.contains("是空的"));
+    // temp 往返：缩略图清空、slot=0
+    save_temp(d, &entry).unwrap();
+    let t = load_temp(d).unwrap();
+    assert_eq!(t.slot, 0);
+    assert!(t.thumb.is_empty());
+    assert_eq!(t.file, "a.ks");
+    let _ = std::fs::remove_dir_all(&dir);
+}
