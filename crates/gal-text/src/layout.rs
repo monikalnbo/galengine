@@ -65,6 +65,13 @@ pub fn wrap_units(text: &str, font: &Font, max_width: u32, ruby_size: u16) -> Ve
     let chars: Vec<char> = text.chars().collect();
     let mut i = 0;
     while i < chars.len() {
+        // v0.3.14 强制换行（r 标签生成）：立即收行（KAG3 [r] 口径）
+        if chars[i] == '\u{1e}' {
+            lines.push(std::mem::take(&mut cur));
+            cur_w = 0;
+            i += 1;
+            continue;
+        }
         let (u, step) = if chars[i] == '\u{b}' {
             // v0.3.13 内嵌图占位符（graph 标签生成）：\u{b}<素材名>\u{b}
             match chars[i + 1..].iter().position(|&c| c == '\u{b}') {
@@ -162,6 +169,11 @@ pub fn plain(text: &str) -> String {
             }
             continue;
         }
+        if chars[i] == '\u{1e}' {
+            // v0.3.14 强制换行标记：朗读按普通换行处理（跳过即可，不产出文本）
+            i += 1;
+            continue;
+        }
         match if chars[i] == '[' { parse_ruby_at(&chars, i) } else { None } {
             Some((base, _, next)) => {
                 out.push_str(&base);
@@ -229,5 +241,22 @@ mod v0313_tests {
         assert_eq!(u.text(), "");
         // 纯文本化：占位符整段去掉
         assert_eq!(plain("前\u{b}face_a\u{b}后"), "前后");
+    }
+}
+
+#[cfg(test)]
+mod v0314_tests {
+    use super::*;
+
+    #[test]
+    fn 强制换行标记朗读时去除() {
+        assert_eq!(plain("第一行\u{1e}第二行"), "第一行第二行");
+    }
+
+    #[test]
+    fn 换行标记不产生文本单元() {
+        // chars 计数语义：\u{1e} 作为 Ch('RS') 只在 wrap_units 特判收行，不出现在单元流
+        // 这里验证 plain 与占位符共存不 panic
+        assert_eq!(plain("前\u{b}x\u{b}\u{1e}后"), "前后");
     }
 }

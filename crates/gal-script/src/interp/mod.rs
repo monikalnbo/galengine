@@ -93,6 +93,10 @@ pub struct Interp {
     pub snapshot_lock: Option<String>,
     /// v0.3.12 禁存标记（disablestore）：true 时引擎侧拒绝存档动作
     pub store_disabled: bool,
+    /// v0.3.14 段落缩进（indent…endindent）：pending 文本前插全角空两格
+    pub(crate) indent_on: bool,
+    /// v0.3.14 瞬时揭示区间（nowait…endnowait）：区间内台词打字机不逐字
+    pub(crate) nowait_on: bool,
 }
 
 /// v0.3.5 宏调用帧：已代入 %attr 的宏体行（克隆自宏表）+ 体内行游标 + 作用域 id
@@ -144,6 +148,8 @@ impl Interp {
             trans_enabled: true,
             snapshot_lock: None,
             store_disabled: false,
+            indent_on: false,
+            nowait_on: false,
         }
     }
 

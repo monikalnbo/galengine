@@ -518,3 +518,29 @@ fn v0313文本标记标签_解析() {
     assert!(matches!(cmd("defstyle", "").unwrap(), Command::Defstyle { align: None }));
     assert!(matches!(cmd("resetstyle", "").unwrap(), Command::Resetstyle));
 }
+
+#[test]
+fn v0314文本控制标签_解析() {
+    // r / l / p（无参）
+    assert!(matches!(cmd("r", "").unwrap(), Command::LineBreak));
+    assert!(matches!(cmd("l", "").unwrap(), Command::LineBreakWait));
+    assert!(matches!(cmd("p", "").unwrap(), Command::PageBreakWait));
+    assert!(cmd("r", "多余").is_err());
+    // er / cm / ct（无参）
+    assert!(matches!(cmd("er", "").unwrap(), Command::EraseText));
+    assert!(matches!(cmd("cm", "").unwrap(), Command::ClearMessage));
+    assert!(matches!(cmd("ct", "").unwrap(), Command::ClearMessageAll));
+    // indent / endindent（无参）
+    assert!(matches!(cmd("indent", "").unwrap(), Command::Indent));
+    assert!(matches!(cmd("endindent", "").unwrap(), Command::EndIndent));
+    // locate x [y]
+    assert!(matches!(cmd("locate", "120").unwrap(), Command::Locate { x: Some(120), y: None }));
+    assert!(matches!(
+        cmd("locate", "120 40").unwrap(),
+        Command::Locate { x: Some(120), y: Some(40) }
+    ));
+    assert!(cmd("locate", "").is_err());
+    // nowait / endnowait（无参）
+    assert!(matches!(cmd("nowait", "").unwrap(), Command::NoWait));
+    assert!(matches!(cmd("endnowait", "").unwrap(), Command::EndNoWait));
+}

@@ -470,6 +470,22 @@ impl Command {
                 }
             }
             "resetstyle" if rest.trim().is_empty() => Ok(Command::Resetstyle),
+            // v0.3.14 文本控制族：r / l / p / er / cm / ct / indent / locate / nowait
+            "r" if rest.trim().is_empty() => Ok(Command::LineBreak),
+            "l" if rest.trim().is_empty() => Ok(Command::LineBreakWait),
+            "p" if rest.trim().is_empty() => Ok(Command::PageBreakWait),
+            "er" if rest.trim().is_empty() => Ok(Command::EraseText),
+            "cm" if rest.trim().is_empty() => Ok(Command::ClearMessage),
+            "ct" if rest.trim().is_empty() => Ok(Command::ClearMessageAll),
+            "indent" if rest.trim().is_empty() => Ok(Command::Indent),
+            "endindent" if rest.trim().is_empty() => Ok(Command::EndIndent),
+            "locate" => match tokens.as_slice() {
+                [x] => Ok(Command::Locate { x: num::<u32>(x).ok(), y: None }),
+                [x, y] => Ok(Command::Locate { x: num::<u32>(x).ok(), y: num::<u32>(y).ok() }),
+                _ => err("locate 用法：locate x [y]"),
+            },
+            "nowait" if rest.trim().is_empty() => Ok(Command::NoWait),
+            "endnowait" if rest.trim().is_empty() => Ok(Command::EndNoWait),
             "call" => match tokens.as_slice() {
                 [t] => Ok(call(None, t)),
                 [f, t] => Ok(call(Some(f.to_string()), t)),

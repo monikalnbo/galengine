@@ -9,9 +9,22 @@ use gal_config::style::DialogStyle;
 use gal_text::font::FontBook;
 
 impl Interp {
+    /// v0.3.14 行内标签拼接通道（r/l/p、graph/ruby/hch 共用）：
+    /// 已有待显文本则接在其后，否则新起一段
+    pub(crate) fn append_pending(&mut self, piece: &str) {
+        match self.pending_text.take() {
+            Some(t) => self.pending_text = Some(t + piece),
+            None => self.pending_text = Some(piece.to_string()),
+        }
+    }
+
     /// app 每帧：待显台词交 FontBook 断行；做 {hero}/{you} 替换
     pub fn apply_pending(&mut self, fonts: &mut FontBook, style: &DialogStyle) {
-        if let Some(text) = self.pending_text.take() {
+        if let Some(mut text) = self.pending_text.take() {
+            // v0.3.14 段落缩进（indent…endindent）：整段前插全角空两格
+            if self.indent_on {
+                text = format!("\u{3000}\u{3000}{text}");
+            }
             self.cur_raw = text.clone();
             let text = self.localize(&text);
             self.last_text = text.chars().take(18).collect();
@@ -33,6 +46,10 @@ impl Interp {
             if let Ok(font) = fonts.font(style.font_size) {
                 let max_w = (style.box_rect[2] - 96) as u32;
                 self.tw.set_units(&text, font, max_w, style.lines_per_page, style.ruby_size);
+                // v0.3.14 nowait 区间：本段瞬时揭示（打字机不逐字）
+                if self.nowait_on {
+                    self.tw.skip();
+                }
             }
         }
     }

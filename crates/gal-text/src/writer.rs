@@ -59,6 +59,12 @@ impl Typewriter {
         self.acc_ms = 0.0;
     }
 
+    /// v0.3.14 瞬时揭示（nowait 区间 / 已读跳过）：当前页全部显出
+    pub fn skip(&mut self) {
+        self.revealed = self.page_chars();
+        self.acc_ms = 0.0;
+    }
+
     pub fn tick(&mut self, dt_ms: f32) {
         if self.page_full() {
             return;

@@ -6,3 +6,6 @@
 
 
 game/data/log/
+
+# 引擎运行时产物（在源码树内跑引擎生成的数据目录）
+crates/gal-audio/game/

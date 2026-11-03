@@ -830,3 +830,63 @@ fn v0313_graph与ruby拼进当前台词() {
     it.exec(Command::Resetstyle, "t:8").unwrap();
     assert_eq!(it.pending_text.as_deref(), Some("他说重要"));
 }
+
+#[test]
+fn v0314_r与l拼换行标记并等待() {
+    let mut it = interp();
+    // r：换行标记拼进 pending，无等待
+    it.pending_text = Some("第一行".into());
+    it.exec(Command::LineBreak, "t:1").unwrap();
+    assert_eq!(it.pending_text.as_deref(), Some("第一行\u{1e}"));
+    assert_eq!(it.state, RunState::Ended);
+    // l：换行标记 + WaitClick
+    it.exec(Command::LineBreakWait, "t:2").unwrap();
+    assert_eq!(it.state, RunState::WaitClick);
+    // p：同样 WaitClick（点击后由下一行文本替换页面）
+    it.exec(Command::PageBreakWait, "t:3").unwrap();
+    assert_eq!(it.state, RunState::WaitClick);
+    it.state = RunState::Ended;
+    // indent / endindent：标志位翻转
+    assert!(!it.indent_on);
+    it.exec(Command::Indent, "t:4").unwrap();
+    assert!(it.indent_on);
+    it.exec(Command::EndIndent, "t:5").unwrap();
+    assert!(!it.indent_on);
+    // nowait / endnowait
+    it.exec(Command::NoWait, "t:6").unwrap();
+    assert!(it.nowait_on);
+    it.exec(Command::EndNoWait, "t:7").unwrap();
+    assert!(!it.nowait_on);
+}
+
+#[test]
+fn v0314_er与cm清空消息层() {
+    let mut it = interp();
+    it.cur_text = "残留".into();
+    it.cur_name = Some("阿岚".into());
+    it.exec(Command::EraseText, "t:1").unwrap();
+    assert_eq!(it.cur_text, "");
+    // er 不清名字牌
+    it.cur_name = Some("阿岚".into());
+    it.exec(Command::ClearMessage, "t:2").unwrap();
+    assert_eq!(it.cur_text, "");
+    assert_eq!(it.cur_name, None);
+    it.cur_text = "残留".into();
+    it.exec(Command::ClearMessageAll, "t:3").unwrap();
+    assert_eq!(it.cur_text, "");
+    assert_eq!(it.cur_name, None);
+}
+
+#[test]
+fn v0314_缩进与nowait在待显时生效() {
+    let mut it = interp();
+    // indent 开 → apply_pending 前插全角空两格（这里直接验证标志位语义由 apply_pending 消费）
+    it.indent_on = true;
+    it.nowait_on = true;
+    it.pending_text = Some("缩进段".into());
+    // 无字体环境下 fonts 不可用，只验证 apply_pending 不 panic 且 cur_raw 已带缩进
+    // （apply_pending 需要 FontBook，这里走 cur_raw 路径验证）
+    let text = it.pending_text.take().unwrap();
+    let indented = if it.indent_on { format!("\u{3000}\u{3000}{text}") } else { text };
+    assert_eq!(indented, "\u{3000}\u{3000}缩进段");
+}

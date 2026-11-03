@@ -340,7 +340,7 @@ dependencies = [
 
 [[package]]
 name = "gal-audio"
-version = "0.3.12"
+version = "0.3.13"
 dependencies = [
  "gal-config",
  "kira",
@@ -348,7 +348,7 @@ dependencies = [
 
 [[package]]
 name = "gal-config"
-version = "0.3.12"
+version = "0.3.13"
 dependencies = [
  "serde",
  "serde_yaml",
@@ -356,7 +356,7 @@ dependencies = [
 
 [[package]]
 name = "gal-engine"
-version = "0.3.12"
+version = "0.3.13"
 dependencies = [
  "gal-audio",
  "gal-config",
@@ -373,7 +373,7 @@ dependencies = [
 
 [[package]]
 name = "gal-ext"
-version = "0.3.12"
+version = "0.3.13"
 dependencies = [
  "gal-script",
  "gal-text",
@@ -382,11 +382,11 @@ dependencies = [
 
 [[package]]
 name = "gal-platform"
-version = "0.3.12"
+version = "0.3.13"
 
 [[package]]
 name = "gal-render"
-version = "0.3.12"
+version = "0.3.13"
 dependencies = [
  "ffmpeg-sidecar",
  "gal-config",
@@ -397,7 +397,7 @@ dependencies = [
 
 [[package]]
 name = "gal-save"
-version = "0.3.12"
+version = "0.3.13"
 dependencies = [
  "gal-script",
  "image",
@@ -407,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "gal-script"
-version = "0.3.12"
+version = "0.3.13"
 dependencies = [
  "gal-audio",
  "gal-config",
@@ -418,7 +418,7 @@ dependencies = [
 
 [[package]]
 name = "gal-text"
-version = "0.3.12"
+version = "0.3.13"
 dependencies = [
  "gal-config",
  "sdl2",
@@ -426,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "gal-ui"
-version = "0.3.12"
+version = "0.3.13"
 dependencies = [
  "gal-config",
  "gal-platform",

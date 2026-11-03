@@ -2,6 +2,39 @@
 
 遵循 [语义化版本](https://semver.org/lang/zh-CN/)。旧 `game.yaml`、旧存档、旧 `savedata/global.json` 均可直接使用。
 
+## v0.3.14 — 2026-11-03
+
+**文本控制批**（backlog P1-6）：KAG3 `r` / `l` / `p` / `er` / `cm` / `ct` / `indent` /
+`endindent` / `locate` / `nowait` / `endnowait` 共 11 个标签。
+存档格式零改动。旧剧本/旧配置/旧存档零改动兼容（实测验证）。
+
+### 新增（11 个标签）
+
+- `r` —— 行内强制换行：当前待显段立即收行，后续文本接在同一段下一行（KAG3 `[r]` 口径）
+- `l` —— 行等待：显示当前行，点击后继续（后续文本接在同段）
+- `p` —— 改页等待：点击后清屏换页（实现为段替换，语义同 KAG3 `[p]`）
+- `er` —— 清空当前消息层文本（保留姓名）
+- `cm` —— 清层：文本与姓名一并清空
+- `ct` —— 清层后继续（演示口径同 `cm`，保留层状态）
+- `indent` / `endindent` —— 段落缩进开关：区间内段落前插全角空两格
+- `locate x [y]` —— 指定后续文本绘制坐标（v0.3.14 记录留证，绘制侧未接线）
+- `nowait` / `endnowait` —— 瞬时显示区间：区间内段落跳过打字机逐字揭示
+
+### 实现
+
+- `gal-text::layout`：`\u{1e}` 强制换行标记（`r`/`l`/`p` 生成），断行时立即收行；
+  纯文本化（朗读/历史）时去除
+- `gal-text::writer::Typewriter::skip()`：当前页瞬时全显（`nowait` 区间消费）
+- 解释器拼接通道 `append_pending`：行内标签不再互相覆盖待显文本
+- `indent_on` / `nowait_on` 解释器标志位，由 `apply_pending` 消费
+
+### 测试
+
+- 单元/执行测试新增：解析守卫（带参 `r`/`l`/`p` 报错）、状态机推进、清空语义、
+  缩进/瞬时标志位、换行标记断行与纯文本化
+- 全量 160 tests 全绿；13 剧本无头回归 ALL_PASS（含新增 `textctl-demo.ks`）
+- 存档兼容实测：旧档 temp.json/global.json 读取正常，tempsave 写档正常
+
 ## v0.3.13 — 2026-11-03
 
 **文本标记批**（backlog P1-5）：KAG3 `graph` / `ruby` / `hch` / `font` / `deffont` / `resetfont` / `style` / `defstyle` / `resetstyle`。

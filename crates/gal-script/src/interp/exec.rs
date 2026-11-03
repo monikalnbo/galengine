@@ -601,6 +601,60 @@ impl Interp {
                 );
                 Ok(false)
             }
+            Command::LineBreak => {
+                // v0.3.14 KAG3 [r]：行内强制换行（\u{1e} 标记，排版层立即收行）
+                self.append_pending("\u{1e}");
+                Ok(false)
+            }
+            Command::LineBreakWait => {
+                // KAG3 [l]：换行后等一次点击
+                self.append_pending("\u{1e}");
+                self.state = RunState::WaitClick;
+                Ok(true)
+            }
+            Command::PageBreakWait => {
+                // KAG3 [p]：等点击；点击后续行前文字消去（pending 分段：等待后再清）
+                self.append_pending("\u{1e}");
+                self.state = RunState::WaitClick;
+                Ok(true)
+            }
+            Command::EraseText => {
+                // KAG3 [er]：清当前消息层文字（无等待）
+                self.tw.clear();
+                self.cur_text.clear();
+                Ok(false)
+            }
+            Command::ClearMessage | Command::ClearMessageAll => {
+                // KAG3 [cm]/[ct]：清空消息层（回卷历史保留；ct 的样式复位本引擎无状态可复位）
+                self.tw.clear();
+                self.cur_text.clear();
+                self.cur_name = None;
+                Ok(false)
+            }
+            Command::Indent => {
+                self.indent_on = true;
+                Ok(false)
+            }
+            Command::EndIndent => {
+                self.indent_on = false;
+                Ok(false)
+            }
+            Command::Locate { x, y } => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    &format!("[locate] 落点记录（按行号排版，坐标忽略）：x={x:?} y={y:?}"),
+                );
+                Ok(false)
+            }
+            Command::NoWait => {
+                self.nowait_on = true;
+                Ok(false)
+            }
+            Command::EndNoWait => {
+                self.nowait_on = false;
+                Ok(false)
+            }
             Command::Else => {
                 let else_at = self.pc - 1;
                 // 有命中分支标记时是「真分支走完跳过」；无标记 = elsif 全假落 else，照常进

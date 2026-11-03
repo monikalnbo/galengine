@@ -346,6 +346,28 @@ pub enum Command {
         align: Option<String>,
     },
     Resetstyle,
+    /// v0.3.14 `r`：行内强制换行（KAG3 [r]）——换行标记拼进当前台词，排版层立即收行
+    LineBreak,
+    /// v0.3.14 `l`：换行后等点击（KAG3 [l]）——换行标记拼进 + WaitClick
+    LineBreakWait,
+    /// v0.3.14 `p`：等点击 + 清屏（KAG3 [p]）——点击后文字消去再续
+    PageBreakWait,
+    /// v0.3.14 `er`：清空当前消息层文字（无等待）
+    EraseText,
+    /// v0.3.14 `cm`：清空消息层（历史保留）；`ct`：cm + 重置行内样式记录
+    ClearMessage,
+    ClearMessageAll,
+    /// v0.3.14 `indent` / `endindent`：段落缩进（首行前插全角空两个）
+    Indent,
+    EndIndent,
+    /// v0.3.14 `locate x y`：行内文字落点（x 记录，DEBUG 留证；y 支持但按行号排版忽略）
+    Locate {
+        x: Option<u32>,
+        y: Option<u32>,
+    },
+    /// v0.3.14 `nowait` / `endnowait`：区间打字机瞬时揭示
+    NoWait,
+    EndNoWait,
     /// 调用子程序：压栈后跳转，`return` 回到下一行
     Call {
         file: Option<String>,
