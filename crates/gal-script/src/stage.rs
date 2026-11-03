@@ -319,6 +319,127 @@ impl MoveClip {
     }
 }
 
+/// v0.3.10 `.asd` 动画档在途剪辑（KAG3 AnimationLayer 口径的多属性关键帧时间轴）。
+/// 三条轨道（x/y/opacity）各自关键帧独立插值；缺轨道 = 该属性不动。
+#[derive(Clone, Debug)]
+pub struct AnimClip {
+    pub layer: usize,
+    /// (时间ms, x, y) 升序
+    pub pos: Vec<(u32, i32, i32)>,
+    /// (时间ms, opacity 0-255) 升序
+    pub opa: Vec<(u32, u8)>,
+    pub dur_ms: u32,
+    pub left_ms: u32,
+}
+
+impl AnimClip {
+    pub fn progress(&self) -> f32 {
+        if self.dur_ms == 0 {
+            return 1.0;
+        }
+        (1.0 - self.left_ms as f32 / self.dur_ms as f32).clamp(0.0, 1.0)
+    }
+
+    /// 段查找：返回 (i, k)——i=当前段起点，k=段内线性进度；空轨道 None
+    fn segment(frames_end: usize, dur: impl Fn(usize) -> u32, t: f32) -> Option<(usize, f32)> {
+        if frames_end == 0 {
+            return None;
+        }
+        let mut i = 0;
+        while i + 1 < frames_end && dur(i + 1) as f32 <= t {
+            i += 1;
+        }
+        if i + 1 >= frames_end {
+            return Some((i, 1.0));
+        }
+        let (t0, t1) = (dur(i), dur(i + 1));
+        let k = ((t - t0 as f32) / (t1 - t0).max(1) as f32).clamp(0.0, 1.0);
+        Some((i, k))
+    }
+
+    /// 当前 (x, y, opacity)；轨道缺省 = 该属性不产出
+    pub fn sample_at(&self, progress: f32) -> Option<((i32, i32), u8)> {
+        let t = progress * self.dur_ms as f32;
+        let p = Self::segment(self.pos.len(), |i| self.pos[i].0, t).map(|(i, k)| {
+            let (_, x0, y0) = self.pos[i];
+            let (_, x1, y1) = self.pos[(i + 1).min(self.pos.len() - 1)];
+            (
+                (x0 as f32 + (x1 - x0) as f32 * k).round() as i32,
+                (y0 as f32 + (y1 - y0) as f32 * k).round() as i32,
+            )
+        });
+        let o = Self::segment(self.opa.len(), |i| self.opa[i].0, t).map(|(i, k)| {
+            let (_, v0) = self.opa[i];
+            let (_, v1) = self.opa[(i + 1).min(self.opa.len() - 1)];
+            (v0 as f32 + (v1 as i32 - v0 as i32) as f32 * k).round().clamp(0.0, 255.0) as u8
+        });
+        match (p, o) {
+            (None, None) => None,
+            (p, o) => Some((p.unwrap_or((0, 0)), o.unwrap_or(255))),
+        }
+    }
+
+    pub fn done(&self) -> bool {
+        self.left_ms == 0
+    }
+}
+
+/// 解析 .asd 文本：行 `time,x,y[,opacity]`（time 升序任意；首行可 `#` 注释）。
+/// 全 0 时间的 x,y 帧/opacity 帧进入对应轨道；空行跳过。
+/// .asd 档解析结果：(位置轨道 [(t,x,y)], 透明度轨道 [(t,opacity)])
+pub type AsdTracks = (Vec<(u32, i32, i32)>, Vec<(u32, u8)>);
+
+pub fn parse_asd(text: &str) -> Result<AsdTracks, String> {
+    let mut pos = Vec::new();
+    let mut opa = Vec::new();
+    for (ln, raw) in text.lines().enumerate() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let cols: Vec<&str> = line.split(',').map(|c| c.trim()).collect();
+        let t: u32 = cols
+            .first()
+            .and_then(|c| c.parse().ok())
+            .ok_or(format!(".asd 第 {} 行：时间列无效：{line}", ln + 1))?;
+        match cols.len() {
+            3 => {
+                let x: i32 =
+                    cols[1].parse().map_err(|_| format!(".asd 第 {} 行：x 无效", ln + 1))?;
+                let y: i32 =
+                    cols[2].parse().map_err(|_| format!(".asd 第 {} 行：y 无效", ln + 1))?;
+                pos.push((t, x, y));
+            }
+            2 => {
+                let o: u8 = cols[1]
+                    .parse()
+                    .map_err(|_| format!(".asd 第 {} 行：opacity 无效（0-255）", ln + 1))?;
+                opa.push((t, o));
+            }
+            4 => {
+                let x: i32 =
+                    cols[1].parse().map_err(|_| format!(".asd 第 {} 行：x 无效", ln + 1))?;
+                let y: i32 =
+                    cols[2].parse().map_err(|_| format!(".asd 第 {} 行：y 无效", ln + 1))?;
+                let o: u8 = cols[3]
+                    .parse()
+                    .map_err(|_| format!(".asd 第 {} 行：opacity 无效（0-255）", ln + 1))?;
+                pos.push((t, x, y));
+                opa.push((t, o));
+            }
+            _ => {
+                return Err(format!(
+                    ".asd 第 {} 行：列数应为 2（t,opacity）或 3（t,x,y）或 4：{line}",
+                    ln + 1
+                ))
+            }
+        }
+    }
+    pos.sort_by_key(|f| f.0);
+    opa.sort_by_key(|f| f.0);
+    Ok((pos, opa))
+}
+
 impl TransClip {
     /// 新内容透明度（0 → 1 线性）
     pub fn alpha(&self) -> f32 {
@@ -379,6 +500,8 @@ pub struct Stage {
     pub trans: Option<TransClip>,
     /// v0.3.6 在途位移动画（各层独立；`move` 触发，`wa` 等待，`animstop` 取消）
     pub moves: Vec<MoveClip>,
+    /// v0.3.10 在途 .asd 动画（`animstart` 触发，`wa`/`animstop` 同样作用）
+    pub anims: Vec<AnimClip>,
 }
 
 impl Default for Stage {
@@ -394,6 +517,7 @@ impl Stage {
             sway: [None; 3],
             trans: None,
             moves: Vec::new(),
+            anims: Vec::new(),
         }
     }
 
@@ -607,13 +731,38 @@ impl Stage {
         Ok(())
     }
 
-    pub fn move_left_ms(&self) -> Option<u32> {
-        self.moves.iter().map(|m| m.left_ms).max()
-    }
-
     /// v0.3.6 animstop：取消层 n 的在途动画，offset 停在当前位置
     pub fn stop_move(&mut self, n: usize) {
         self.moves.retain(|m| m.layer != n);
+        self.anims.retain(|m| m.layer != n); // v0.3.10 animstop 同样作用于 .asd 剪辑
+    }
+
+    /// v0.3.10 animstart：加载 .asd 轨道为在途动画（同层重复调用覆盖）。
+    /// 无 pos 轨道时不插 0 帧（position 不动）；opacity 轨道独立。
+    pub fn start_anim(
+        &mut self,
+        n: usize,
+        pos: Vec<(u32, i32, i32)>,
+        opa: Vec<(u32, u8)>,
+    ) -> Result<(), String> {
+        self.ensure_layer(n)?;
+        if pos.is_empty() && opa.is_empty() {
+            return Err(format!("层 {n}：animstart 动画档无任何轨道"));
+        }
+        let dur_ms = pos.iter().map(|f| f.0).chain(opa.iter().map(|f| f.0)).max().unwrap_or(0);
+        self.anims.retain(|m| m.layer != n);
+        self.anims.push(AnimClip { layer: n, pos, opa, dur_ms, left_ms: dur_ms });
+        Ok(())
+    }
+
+    /// v0.3.10 在途动画（move+asd）的剩余时长（wa 等待合并口径）
+    pub fn move_left_ms(&self) -> Option<u32> {
+        let a = self.moves.iter().map(|m| m.left_ms).max();
+        let b = self.anims.iter().map(|m| m.left_ms).max();
+        match (a, b) {
+            (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        }
     }
 
     /// v0.3.6 消费在途 move：写回各层 offset，完成即摘除
@@ -629,6 +778,25 @@ impl Stage {
             self.moves.iter().enumerate().filter(|(_, m)| m.done()).map(|(i, _)| i).collect();
         for i in done.into_iter().rev() {
             self.moves.swap_remove(i);
+        }
+        // v0.3.10 .asd 剪辑：offset 轨道写回层 offset，opacity 轨道写回层 opacity
+        for m in &mut self.anims {
+            m.left_ms = m.left_ms.saturating_sub(dt_ms);
+            if let Some(((x, y), o)) = m.sample_at(m.progress()) {
+                if let Some(l) = self.layers.get_mut(m.layer) {
+                    if !m.pos.is_empty() {
+                        l.offset = (x, y);
+                    }
+                    if !m.opa.is_empty() {
+                        l.opacity = o;
+                    }
+                }
+            }
+        }
+        let adone: Vec<usize> =
+            self.anims.iter().enumerate().filter(|(_, m)| m.done()).map(|(i, _)| i).collect();
+        for i in adone.into_iter().rev() {
+            self.anims.swap_remove(i);
         }
     }
 
@@ -981,5 +1149,70 @@ mod tests {
         assert_eq!(r.char(1).offset, (-140, 20));
         assert_eq!(r.layer(9).unwrap().cur.as_deref(), Some("free/z"));
         assert_eq!(r.layer(9).unwrap().offset, (7, -3));
+    }
+
+    // ===== v0.3.10 animstart / .asd 动画档 =====
+
+    #[test]
+    fn asd解析两三四列与注释乱序排序() {
+        let text = "# 注释\n\n100,10,20,128\n0,0,0\n50,5,5,255\n";
+        let (pos, opa) = parse_asd(text).unwrap();
+        assert_eq!(pos, vec![(0, 0, 0), (50, 5, 5), (100, 10, 20)]);
+        assert_eq!(opa, vec![(50, 255), (100, 128)]);
+        // 只有 pos 轨道
+        let (pos, opa) = parse_asd("0,1,2\n200,3,4\n").unwrap();
+        assert_eq!(pos.len(), 2);
+        assert!(opa.is_empty());
+    }
+
+    #[test]
+    fn asd错列数与空轨道报错() {
+        assert!(parse_asd("0\n").is_err()); // 1 列
+        assert!(parse_asd("0,1,2,3,4\n").is_err()); // 5 列
+        assert!(parse_asd("x,1,2\n").is_err()); // 非数字
+        assert!(parse_asd("100,x,2\n").is_err());
+        // 两轨道全空 → start_anim 报错口径在 start_anim 侧，parse 允许空档
+        let (pos, opa) = parse_asd("").unwrap();
+        assert!(pos.is_empty() && opa.is_empty());
+    }
+
+    #[test]
+    fn animstart档位插值含opacity且wa等待() {
+        let mut s = Stage::new();
+        s.set_layer(5, Some("free/a".into()), 0).unwrap();
+        s.start_anim(5, vec![(0, 0, 0), (400, 40, 0)], vec![(0, 255), (400, 64)]).unwrap();
+        assert_eq!(s.move_left_ms(), Some(400)); // wa 口径含 anims
+        s.tick(200.0);
+        assert_eq!(s.layers[5].offset, (20, 0));
+        assert_eq!(s.layers[5].opacity, 160); // 255→64 中点 159.5，round 半值远离
+        s.tick(200.0);
+        assert_eq!(s.layers[5].offset, (40, 0));
+        assert_eq!(s.layers[5].opacity, 64);
+        assert!(s.anims.is_empty());
+    }
+
+    #[test]
+    fn animstart同层覆盖且animstop共用停点() {
+        let mut s = Stage::new();
+        s.start_anim(6, vec![(0, 0, 0), (400, 80, 0)], vec![]).unwrap();
+        s.start_anim(6, vec![(0, 0, 0), (200, 9, 9)], vec![]).unwrap();
+        assert_eq!(s.anims.len(), 1);
+        assert_eq!(s.anims[0].dur_ms, 200);
+        s.tick(100.0);
+        s.stop_move(6); // animstop 与 move 共用停点
+        assert!(s.anims.is_empty());
+        assert_eq!(s.layers[6].offset, (5, 5));
+    }
+
+    #[test]
+    fn animstart动画不进存档快照() {
+        let mut s = Stage::new();
+        s.set_layer(7, Some("free/b".into()), 0).unwrap();
+        s.start_anim(7, vec![(0, 0, 0), (100, 10, 10)], vec![]).unwrap();
+        s.tick(60.0);
+        let mut r = Stage::new();
+        r.restore(s.snapshot());
+        assert_eq!(r.layers[7].offset.0, 6);
+        assert!(r.anims.is_empty());
     }
 }

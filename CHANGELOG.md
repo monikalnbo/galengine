@@ -2,6 +2,24 @@
 
 遵循 [语义化版本](https://semver.org/lang/zh-CN/)。旧 `game.yaml`、旧存档、旧 `savedata/global.json` 均可直接使用。
 
+## v0.3.10 — 2026-11-03
+
+**动画档批**（backlog P2-2）：`animstart 层 档名` + `data/asd/*.asd` 多属性关键帧时间轴。
+存档格式零改动（在途动画不进存档，与 move 同口径）。旧剧本/旧配置/旧存档零改动兼容（实测验证）。
+
+### 新增
+
+- `animstart 层 档名`：加载 `data/asd/档名.asd` 文本档为多属性关键帧时间轴。
+  行格式 `time,x,y[,opacity]`（2 列=纯 opacity、3 列=纯位移、4 列=双轨齐写；`#` 注释；
+  时间乱序自动升序 sort）；与 move 共用「同层覆盖、wa 等待、animstop 停点」口径。
+- opacity 轨道随时间线性插值直写层不透明度（`layopt` 的 opacity 字段）。
+- 档文件缺失/解析错误 → 中文报错停句（演出不静默黑屏）；空双轨档报错。
+
+### 兼容性
+
+- 存档快照结构零改动；`wa`/`animstop`/`stop_move` 均并入 anims 队列，旧 `move` 剧本零改动
+  （anim-demo.ks 等 9 剧本全量无头回归 ALL_PASS）。
+
 ## v0.3.9 — 2026-11-03
 
 **条件标签收尾批**（backlog P1-3 收尾）：KAG3 `layopt` / `laycount` / `stoptrans` + `move` 缓动函数族。

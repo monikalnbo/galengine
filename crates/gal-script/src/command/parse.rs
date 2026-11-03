@@ -260,6 +260,12 @@ impl Command {
                 _ => err("laycount 用法：laycount 层数"),
             },
             "stoptrans" if tokens.is_empty() => Ok(Command::StopTrans),
+            "animstart" => match tokens.as_slice() {
+                [n, name] => {
+                    Ok(Command::AnimStart { n: layer_num(n, ctx)?, name: name.to_string() })
+                }
+                _ => err("animstart 用法：animstart 层 档名"),
+            },
             // move 首参是层号：`move 层 x,y@ms …`
             "wa" if tokens.is_empty() => Ok(Command::WaitMove),
             "animstop" => match tokens.as_slice() {

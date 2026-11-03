@@ -697,3 +697,19 @@ fn v039_move缓动尾参执行() {
     assert_eq!(m.ease, crate::stage::Ease::Linear);
     assert_eq!(m.offset_at(0.5).0, 50);
 }
+
+#[test]
+fn v0310_animstart执行与等待() {
+    let mut it = interp();
+    // 合法档（内联文本走 stage 直接口径；文件读取在无头回归 animstart-demo 覆盖）
+    let _ = it.exec(Command::AnimStart { n: 5, name: "swing".into() }, "t:1");
+    // data 目录无 asd/swing.asd → 中文报错（不静默崩）
+    let err = it.exec(Command::AnimStart { n: 5, name: "nosuch".into() }, "t:2").unwrap_err();
+    assert!(err.contains("animstart"));
+    // 直接走 stage：start_anim 后 wa 等待口径
+    it.stage.start_anim(5, vec![(0, 0, 0), (300, 30, 0)], vec![]).unwrap();
+    assert_eq!(it.stage.move_left_ms(), Some(300));
+    it.stage.tick(300.0);
+    assert!(it.stage.anims.is_empty());
+    assert_eq!(it.stage.layers[5].offset, (30, 0));
+}

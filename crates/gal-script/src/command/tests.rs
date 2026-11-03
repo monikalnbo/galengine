@@ -413,4 +413,12 @@ fn v039条件标签收尾_解析() {
     assert!(matches!(cmd("move", "5 100,0@500").unwrap(), Command::Move { n: 5, .. }));
     // 层号同名帧写法不受影响（move 1 0,0 无尾参）
     assert!(matches!(cmd("move", "1 0,0").unwrap(), Command::Move { n: 1, .. }));
+    // animstart 层 档名（v0.3.10）
+    assert!(matches!(
+        cmd("animstart", "5 swing").unwrap(),
+        Command::AnimStart { n: 5, name } if name == "swing"
+    ));
+    assert!(cmd("animstart", "").is_err());
+    assert!(cmd("animstart", "5").is_err());
+    assert!(cmd("animstart", "5 a b").is_err());
 }

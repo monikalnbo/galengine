@@ -306,6 +306,16 @@ impl Interp {
                 self.stage.stop_trans();
                 Ok(false)
             }
+            Command::AnimStart { n, name } => {
+                // .asd 档从数据目录 asd/ 查（复用素材路径解析兜底 data 直下）
+                let path = gal_config::paths::resolve("asd", &format!("{name}.asd"));
+                let text = std::fs::read_to_string(&path)
+                    .map_err(|e| format!("animstart 动画档读取失败 {path}：{e}"))?;
+                let (pos, opa) =
+                    crate::stage::parse_asd(&text).map_err(|e| format!("animstart {name}：{e}"))?;
+                self.stage.start_anim(n as usize, pos, opa)?;
+                Ok(false)
+            }
             Command::WaitMove => match self.stage.move_left_ms() {
                 Some(left) => {
                     self.state = RunState::WaitTimer { left_ms: left as f32 };

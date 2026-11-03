@@ -39,6 +39,8 @@ pub fn resolve(kind: &str, storage: &str) -> String {
             ],
             &format!("{data}/video/{storage}.mp4"),
         ),
+        // v0.3.10 动画档（animstart）：asd/ 目录下 .asd 文本
+        "asd" => format!("{data}/asd/{storage}"),
         _ => format!("{data}/{storage}"),
     }
 }

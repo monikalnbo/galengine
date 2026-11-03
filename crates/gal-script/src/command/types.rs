@@ -87,6 +87,11 @@ pub enum Command {
     },
     /// stoptrans：中止在途转场（层停在目标态）
     StopTrans,
+    /// animstart 层 档名：加载 data/asd/档名.asd 为多属性关键帧时间轴（v0.3.10）
+    AnimStart {
+        n: u8,
+        name: String,
+    },
     /// move 加 ease 参数：缓动方法（linear/easein/easeout/easeinout），v0.3.9
     /// 复用 Move 的 frames，另带 method
     MoveEase {
