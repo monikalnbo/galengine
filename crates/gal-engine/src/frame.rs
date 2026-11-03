@@ -14,6 +14,12 @@ use gal_text::font::FontBook;
 use gal_ui::overlay::{esc_items, Overlay};
 use gal_ui::{bottombar, choice, dialog, gallery, inputbox, menu, ritual, savemenu, title};
 
+/// 帧附加输入：视频层所需（`video` feature 关闭时仅作透传占位）
+pub struct FrameExt<'a> {
+    pub dt_ms: f32,
+    pub creator: &'a sdl2::render::TextureCreator<sdl2::video::WindowContext>,
+}
+
 pub fn frame(
     g: &mut Game,
     fonts: &mut FontBook,
@@ -21,6 +27,7 @@ pub fn frame(
     renderer: &mut Renderer,
     canvas: &mut Canvas<Window>,
     thumbs: &mut savemenu::ThumbCache,
+    _ext: FrameExt<'_>,
 ) -> Result<(), String> {
     // 抖动偏移：幅度随剩余时间衰减
     let (dx, dy) = match &g.sys.shake {
@@ -79,7 +86,24 @@ pub fn frame(
     let now = g.now_ms;
     let auto = g.auto;
 
+    // 视频层（`video` feature）：闭包外 tick + 取帧拷贝，避免与 g 只读借用冲突。
+    // 拷贝一帧 RGBA（~2.7MB @1280x720，30fps 下开销可接受）换借用解耦
+    #[cfg(feature = "video")]
+    let video_frame: Option<(Vec<u8>, usize, usize)> = {
+        let v = &mut g.sys.video;
+        if v.playing() && v.tick(_ext.dt_ms) {
+            v.frame_rgba().map(|(d, w, h)| (d.to_vec(), w, h))
+        } else {
+            None
+        }
+    };
+
     renderer.compose(canvas, dx, dy, |tc| {
+        // 有新帧 → 满帧绘制，盖在演出层之上
+        #[cfg(feature = "video")]
+        if let Some((data, w, h)) = &video_frame {
+            gal_render::video::blit_frame(data, *w, *h, _ext.creator, tc)?;
+        }
         if g.started {
             gal_render::draw_stage(&g.interp.stage, tc, bank)?;
             if !g.hide_ui {

@@ -118,6 +118,117 @@ impl Game {
                     self.msg(e);
                 }
             }
+            // ===== v0.3.8 KAG3 视频标签组（feature `video` 关闭时 WARN 放行）=====
+            #[cfg(feature = "video")]
+            SysEvent::VideoSet { params } => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    &format!("[video] 参数设置（记录不生效）：{params}"),
+                );
+            }
+            #[cfg(not(feature = "video"))]
+            SysEvent::VideoSet { params } => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Warn,
+                    "script",
+                    &format!("[video] 未开启 video feature：参数设置忽略（{params}）"),
+                );
+            }
+            #[cfg(feature = "video")]
+            SysEvent::PlayVideo { name, ms, skip } => {
+                self.sys.video.hide_msg_ms = ms;
+                self.sys.video.skip = skip;
+                let path = gal_config::paths::resolve("video", &name);
+                if !self.sys.video.play(&path, 1280, 720) {
+                    gal_audio::log::log(
+                        gal_audio::log::Level::Warn,
+                        "script",
+                        &format!("[video] playvideo 启动失败：{path}"),
+                    );
+                }
+            }
+            #[cfg(not(feature = "video"))]
+            SysEvent::PlayVideo { name, .. } => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Warn,
+                    "script",
+                    &format!("[video] 未开启 video feature：playvideo 跳过（{name}）"),
+                );
+            }
+            #[cfg(feature = "video")]
+            SysEvent::StopVideo => self.sys.video.stop(),
+            #[cfg(not(feature = "video"))]
+            SysEvent::StopVideo => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    "[video] 未开启 video feature：stopvideo 忽略",
+                );
+            }
+            #[cfg(feature = "video")]
+            SysEvent::OpenVideo { name } | SysEvent::PrepareVideo { name } => {
+                // 本引擎 open/prepare 与 play 等价（无独立预载管线）
+                let path = gal_config::paths::resolve("video", &name);
+                if !self.sys.video.play(&path, 1280, 720) {
+                    gal_audio::log::log(
+                        gal_audio::log::Level::Warn,
+                        "script",
+                        &format!("[video] openvideo 启动失败：{path}"),
+                    );
+                }
+            }
+            #[cfg(not(feature = "video"))]
+            SysEvent::OpenVideo { name } | SysEvent::PrepareVideo { name } => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Warn,
+                    "script",
+                    &format!("[video] 未开启 video feature：openvideo/preparevideo 跳过（{name}）"),
+                );
+            }
+            #[cfg(feature = "video")]
+            SysEvent::PauseVideo => self.sys.video.pause(),
+            #[cfg(not(feature = "video"))]
+            SysEvent::PauseVideo => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    "[video] 未开启 video feature：pausevideo 忽略",
+                );
+            }
+            #[cfg(feature = "video")]
+            SysEvent::ResumeVideo => {
+                // 简单实现：恢复=重播（无播放头记忆），DEBUG 留证
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    "[video] resumevideo：本引擎以重播实现（无播放头记忆）",
+                );
+            }
+            #[cfg(not(feature = "video"))]
+            SysEvent::ResumeVideo => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    "[video] 未开启 video feature：resumevideo 忽略",
+                );
+            }
+            #[cfg(feature = "video")]
+            SysEvent::RewindVideo => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    "[video] rewindvideo：本引擎以重播实现（需先 openvideo 指定片源）",
+                );
+            }
+            #[cfg(not(feature = "video"))]
+            SysEvent::RewindVideo => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    "[video] 未开启 video feature：rewindvideo 忽略",
+                );
+            }
         }
         Ok(())
     }

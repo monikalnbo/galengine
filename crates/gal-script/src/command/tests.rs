@@ -298,6 +298,47 @@ fn v033等待标签_解析() {
 }
 
 #[test]
+fn v038视频标签组_解析() {
+    assert!(matches!(
+        cmd("video", "mode=1 seek=500").unwrap(),
+        Command::Video { ref params } if params == "mode=1 seek=500"
+    ));
+    assert!(matches!(
+        cmd("playvideo", "op").unwrap(),
+        Command::PlayVideo { ref name, ms: 0, skip: false } if name == "op"
+    ));
+    assert!(matches!(
+        cmd("playvideo", "op 3000").unwrap(),
+        Command::PlayVideo { ms: 3000, skip: false, .. }
+    ));
+    assert!(matches!(
+        cmd("playvideo", "op skip").unwrap(),
+        Command::PlayVideo { ms: 0, skip: true, .. }
+    ));
+    assert!(matches!(
+        cmd("playvideo", "op 3000 skip").unwrap(),
+        Command::PlayVideo { ms: 3000, skip: true, .. }
+    ));
+    assert!(cmd("playvideo", "").is_err());
+    assert!(matches!(cmd("stopvideo", "").unwrap(), Command::StopVideo));
+    assert!(matches!(
+        cmd("openvideo", "op").unwrap(),
+        Command::OpenVideo { ref name } if name == "op"
+    ));
+    assert!(cmd("openvideo", "").is_err());
+    assert!(matches!(cmd("pausevideo", "").unwrap(), Command::PauseVideo));
+    assert!(matches!(cmd("resumevideo", "").unwrap(), Command::ResumeVideo));
+    assert!(matches!(
+        cmd("preparevideo", "op").unwrap(),
+        Command::PrepareVideo { ref name } if name == "op"
+    ));
+    assert!(matches!(cmd("rewindvideo", "").unwrap(), Command::RewindVideo));
+    // 带参数视为剧本写错，中文报错
+    assert!(cmd("stopvideo", "x").is_err());
+    assert!(cmd("pausevideo", "1").is_err());
+}
+
+#[test]
 fn v033转场方法_解析() {
     use crate::stage::{Direction, TransMethod};
     assert_eq!(TransMethod::parse("crossfade"), TransMethod::Crossfade);

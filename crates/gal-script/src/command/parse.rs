@@ -297,6 +297,40 @@ impl Command {
             // v0.3.3 KAG3 wm/wv/wp：等 BGM 播完 / 等视频播完 / 等全部声音播完
             "wm" if tokens.is_empty() => Ok(Command::WaitMusic),
             "wv" if tokens.is_empty() => Ok(Command::WaitVideo),
+            // ===== v0.3.8 KAG3 视频标签组（引擎侧未开 video feature 时 WARN 放行）=====
+            "video" => Ok(Command::Video { params: tokens.join(" ") }),
+            "playvideo" => match tokens.as_slice() {
+                [name] => Ok(Command::PlayVideo { name: name.to_string(), ms: 0, skip: false }),
+                [name, ms] => match num::<u32>(ms) {
+                    Ok(v) => Ok(Command::PlayVideo { name: name.to_string(), ms: v, skip: false }),
+                    Err(_) => Ok(Command::PlayVideo {
+                        name: name.to_string(),
+                        ms: 0,
+                        skip: ms == &"skip",
+                    }),
+                },
+                [name, ms, rest_tokens @ ..] => {
+                    let skip = rest_tokens.iter().any(|t| t == &"skip");
+                    Ok(Command::PlayVideo {
+                        name: name.to_string(),
+                        ms: num::<u32>(ms).unwrap_or(0),
+                        skip,
+                    })
+                }
+                _ => err("playvideo 用法：playvideo 名称 [ms] [skip]"),
+            },
+            "stopvideo" if tokens.is_empty() => Ok(Command::StopVideo),
+            "openvideo" => match tokens.as_slice() {
+                [name] => Ok(Command::OpenVideo { name: name.to_string() }),
+                _ => err("openvideo 用法：openvideo 名称"),
+            },
+            "pausevideo" if tokens.is_empty() => Ok(Command::PauseVideo),
+            "resumevideo" if tokens.is_empty() => Ok(Command::ResumeVideo),
+            "preparevideo" => match tokens.as_slice() {
+                [name] => Ok(Command::PrepareVideo { name: name.to_string() }),
+                _ => err("preparevideo 用法：preparevideo 名称"),
+            },
+            "rewindvideo" if tokens.is_empty() => Ok(Command::RewindVideo),
             "wp" if tokens.is_empty() => Ok(Command::WaitAllSound),
             // KAG3 `wt`：多种等待类型；当前只实装转场等待（其余参数忽略）
             "wt" => Ok(Command::WaitTrans),

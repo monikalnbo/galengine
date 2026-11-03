@@ -627,3 +627,36 @@ fn v037_transon关闭时forelay直切() {
     // 直切：转场片段时长为 0（与 Trans 指令同构，下一帧即完成）
     assert_eq!(it.stage.trans.as_ref().map(|t| t.dur_ms), Some(0.0));
 }
+
+#[test]
+fn v038视频标签组_推系统事件() {
+    let mut it = interp();
+    it.exec(Command::Video { params: "mode=1".into() }, "t:1").unwrap();
+    it.exec(Command::PlayVideo { name: "op".into(), ms: 2000, skip: true }, "t:2").unwrap();
+    it.exec(Command::StopVideo, "t:3").unwrap();
+    it.exec(Command::OpenVideo { name: "ed".into() }, "t:4").unwrap();
+    it.exec(Command::PauseVideo, "t:5").unwrap();
+    it.exec(Command::ResumeVideo, "t:6").unwrap();
+    it.exec(Command::PrepareVideo { name: "ed".into() }, "t:7").unwrap();
+    it.exec(Command::RewindVideo, "t:8").unwrap();
+    assert!(matches!(
+        it.events.as_slice(),
+        [
+            crate::interp::SysEvent::VideoSet { params },
+            crate::interp::SysEvent::PlayVideo { name, ms: 2000, skip: true },
+            crate::interp::SysEvent::StopVideo,
+            crate::interp::SysEvent::OpenVideo { name: n2 },
+            crate::interp::SysEvent::PauseVideo,
+            crate::interp::SysEvent::ResumeVideo,
+            crate::interp::SysEvent::PrepareVideo { name: n3 },
+            crate::interp::SysEvent::RewindVideo,
+        ] if params == "mode=1" && name == "op" && n2 == "ed" && n3 == "ed"
+    ));
+}
+
+#[test]
+fn v038_wv等待视频播完() {
+    let mut it = interp();
+    it.exec(Command::WaitVideo, "t:1").unwrap();
+    assert!(matches!(it.state, RunState::WaitAudio(crate::interp::AudioWait::VideoDone)));
+}

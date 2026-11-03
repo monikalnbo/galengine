@@ -21,3 +21,7 @@ gal-ui.workspace = true
 [[bin]]
 name = "galengine"
 path = "src/main.rs"
+
+[features]
+# v0.3.8 透传到 gal-render 的 `video`
+video = ["gal-render/video"]

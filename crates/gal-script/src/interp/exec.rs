@@ -328,6 +328,39 @@ impl Interp {
                 self.state = RunState::WaitAudio(AudioWait::MusicDone);
                 Ok(true)
             }
+            // ===== v0.3.8 KAG3 视频标签组：进 SysEvent 队列，引擎侧按 feature 消费 =====
+            Command::Video { params } => {
+                self.events.push(SysEvent::VideoSet { params });
+                Ok(false)
+            }
+            Command::PlayVideo { name, ms, skip } => {
+                self.events.push(SysEvent::PlayVideo { name, ms, skip });
+                Ok(false)
+            }
+            Command::StopVideo => {
+                self.events.push(SysEvent::StopVideo);
+                Ok(false)
+            }
+            Command::OpenVideo { name } => {
+                self.events.push(SysEvent::OpenVideo { name });
+                Ok(false)
+            }
+            Command::PauseVideo => {
+                self.events.push(SysEvent::PauseVideo);
+                Ok(false)
+            }
+            Command::ResumeVideo => {
+                self.events.push(SysEvent::ResumeVideo);
+                Ok(false)
+            }
+            Command::PrepareVideo { name } => {
+                self.events.push(SysEvent::PrepareVideo { name });
+                Ok(false)
+            }
+            Command::RewindVideo => {
+                self.events.push(SysEvent::RewindVideo);
+                Ok(false)
+            }
             Command::WaitVideo => {
                 self.state = RunState::WaitAudio(AudioWait::VideoDone);
                 Ok(true)

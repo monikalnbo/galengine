@@ -6,6 +6,8 @@ pub mod grade;
 pub mod prefetch;
 pub mod renderer;
 pub mod stage_draw;
+#[cfg(feature = "video")]
+pub mod video;
 
 pub use assets::TextureBank;
 pub use prefetch::Prefetcher;

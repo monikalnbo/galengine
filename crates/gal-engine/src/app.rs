@@ -180,13 +180,31 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
             }
             let a = &g.sys.audio;
             // 无声卡降级：条件立即满足（不卡演出）
+            // v0.3.8：video feature 开启时 wv 以播放器状态为准（不看声卡）
+            #[cfg(feature = "video")]
+            let ok = match w {
+                AudioWait::VideoDone => !g.sys.video.playing(),
+                _ => {
+                    !a.ok
+                        || match w {
+                            AudioWait::BgmFade => !a.bgm_fading(),
+                            AudioWait::BgmLoopHit => a.peek_loop_hit(),
+                            AudioWait::SeDone => !a.se_playing(),
+                            AudioWait::SeFade => !a.se_fading(),
+                            // v0.3.3 wm/wv/wp
+                            AudioWait::MusicDone => !a.bgm_playing(),
+                            AudioWait::VideoDone => !a.video_playing(),
+                            AudioWait::AllDone => !a.any_playing(),
+                        }
+                }
+            };
+            #[cfg(not(feature = "video"))]
             let ok = !a.ok
                 || match w {
                     AudioWait::BgmFade => !a.bgm_fading(),
                     AudioWait::BgmLoopHit => a.peek_loop_hit(),
                     AudioWait::SeDone => !a.se_playing(),
                     AudioWait::SeFade => !a.se_fading(),
-                    // v0.3.3 wm/wv/wp
                     AudioWait::MusicDone => !a.bgm_playing(),
                     AudioWait::VideoDone => !a.video_playing(),
                     AudioWait::AllDone => !a.any_playing(),
@@ -282,6 +300,7 @@ pub fn run_inner(boot: Boot) -> Result<(), String> {
             &mut renderer,
             &mut canvas,
             &mut thumbs,
+            crate::frame::FrameExt { dt_ms: dt, creator: &creator },
         )?;
 
         let spent = t0.elapsed();

@@ -28,6 +28,9 @@ pub struct Msg {
 
 pub struct Systems {
     pub audio: Audio,
+    /// v0.3.8 视频播放器（`video` feature 关闭时恒 None，wv 走无声降级路径）
+    #[cfg(feature = "video")]
+    pub video: gal_render::video::VideoPlayer,
     pub meta: MetaState,
     pub meta_path: String,
     pub save_dir: String,

@@ -93,6 +93,25 @@ pub enum SysEvent {
         content: String,
     },
     DesktopOpen(String),
+    // ===== v0.3.8 KAG3 视频标签组（引擎侧未开 `video` feature 时 WARN 放行）=====
+    VideoSet {
+        params: String,
+    },
+    PlayVideo {
+        name: String,
+        ms: u32,
+        skip: bool,
+    },
+    StopVideo,
+    OpenVideo {
+        name: String,
+    },
+    PauseVideo,
+    ResumeVideo,
+    PrepareVideo {
+        name: String,
+    },
+    RewindVideo,
 }
 
 /// 历史对白回卷条目

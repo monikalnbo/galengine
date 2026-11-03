@@ -175,6 +175,8 @@ impl Game {
         let style = compose_style(&conf, &skins, None, &gal_script::vars::Vars::default());
         let sys = Systems {
             audio,
+            #[cfg(feature = "video")]
+            video: gal_render::video::VideoPlayer::new(),
             meta,
             meta_path,
             save_dir: conf.save.dir.clone(),

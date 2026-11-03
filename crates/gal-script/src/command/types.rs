@@ -84,10 +84,37 @@ pub enum Command {
     // ===== v0.3.3 KAG3 等待标签（wm/wv/wp）=====
     /// wm：等 BGM 播完
     WaitMusic,
-    /// wv：等视频播完（本引擎暂无视频子系统 → 立即放行）
+    /// wv：等视频播完（无视频子系统/未开播 → 立即放行）
     WaitVideo,
     /// wp：等全部声音（BGM/SE/语音）播完
     WaitAllSound,
+    // ===== v0.3.8 KAG3 视频标签组（引擎侧未开 `video` feature 时 WARN 放行）=====
+    /// video 底层参数设置（KAG3 #115，本引擎收下参数但仅 DEBUG 留证）
+    Video {
+        params: String,
+    },
+    /// playvideo 名称 [ms] [skip]：开播视频（ms=自动隐层延时，skip=可点击跳过）
+    PlayVideo {
+        name: String,
+        ms: u32,
+        skip: bool,
+    },
+    /// stopvideo：停止播放
+    StopVideo,
+    /// openvideo：打开文件准备播放（本引擎与 playvideo 等价）
+    OpenVideo {
+        name: String,
+    },
+    /// pausevideo：暂停
+    PauseVideo,
+    /// resumevideo：恢复
+    ResumeVideo,
+    /// preparevideo：预载（本引擎与 openvideo 等价）
+    PrepareVideo {
+        name: String,
+    },
+    /// rewindvideo：回到开头
+    RewindVideo,
     // ===== v0.3.2 KAG3 音频标签组（双缓冲/淡入淡出/循环点/等待语义）=====
     /// playbgm [ms]：双缓冲播放 BGM（可指定淡入 ms）
     PlayBgm {

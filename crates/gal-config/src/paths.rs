@@ -26,6 +26,19 @@ pub fn resolve(kind: &str, storage: &str) -> String {
             ],
             &format!("{data}/fgimage/{storage}.png"),
         ),
+        // v0.3.8 视频片源（video feature）：裸名 → video/ movie/ 目录多扩展名探测
+        "video" => first_exists(
+            &[
+                format!("{data}/video/{storage}.mp4"),
+                format!("{data}/video/{storage}.webm"),
+                format!("{data}/video/{storage}.mkv"),
+                format!("{data}/video/{storage}.avi"),
+                format!("{data}/movie/{storage}.mp4"),
+                format!("{data}/movie/{storage}.webm"),
+                format!("{data}/{storage}"),
+            ],
+            &format!("{data}/video/{storage}.mp4"),
+        ),
         _ => format!("{data}/{storage}"),
     }
 }
