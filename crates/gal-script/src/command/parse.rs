@@ -520,6 +520,48 @@ impl Command {
                 [x, y] => Ok(Command::Locate { x: num::<u32>(x).ok(), y: num::<u32>(y).ok() }),
                 _ => err("locate 用法：locate x [y]"),
             },
+            // v0.3.16 KAG3 position：属性式（key=value），至少一项；写 sf.msg* 对账生效
+            "position" if rest.contains('=') => {
+                let (mut left, mut top, mut width, mut height, mut visible, mut opacity) =
+                    (None, None, None, None, None, None);
+                for (k, v) in parse_attrs(rest) {
+                    match k.as_str() {
+                        "left" => left = v.trim().parse().ok(),
+                        "top" => top = v.trim().parse().ok(),
+                        "width" => width = v.trim().parse().ok(),
+                        "height" => height = v.trim().parse().ok(),
+                        "visible" => visible = Some(v.trim() != "false"),
+                        "opacity" => opacity = v.trim().parse().ok(),
+                        _ => {}
+                    }
+                }
+                if left.is_none()
+                    && top.is_none()
+                    && width.is_none()
+                    && height.is_none()
+                    && visible.is_none()
+                    && opacity.is_none()
+                {
+                    return err(
+                        "position 用法：position left= top= width= height= visible= opacity=（至少一项）",
+                    );
+                }
+                Ok(Command::Position { left, top, width, height, visible, opacity })
+            }
+            // v0.3.16 position 无参数/位置参数式：同样落到用法提示（只收属性式）
+            "position" => err(
+                "position 用法：position left= top= width= height= visible= opacity=（至少一项）",
+            ),
+            // v0.3.16 KAG3 current：单消息层引擎，参数记录 + DEBUG 留证
+            "current" => {
+                let mut layer = None;
+                for (k, v) in parse_attrs(rest) {
+                    if k == "layer" {
+                        layer = Some(v);
+                    }
+                }
+                Ok(Command::Current { layer })
+            }
             "nowait" if rest.trim().is_empty() => Ok(Command::NoWait),
             "endnowait" if rest.trim().is_empty() => Ok(Command::EndNoWait),
             "call" => match tokens.as_slice() {

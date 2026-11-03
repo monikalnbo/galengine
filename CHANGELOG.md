@@ -2,6 +2,28 @@
 
 遵循 [语义化版本](https://semver.org/lang/zh-CN/)。旧 `game.yaml`、旧存档、旧 `savedata/global.json` 均可直接使用。
 
+## v0.3.16 — 2026-11-03
+
+**消息层批**（backlog §6 优先项，152 表 #20/#21）：KAG3 `position` / `current` 共 2 个标签。
+存档格式零改动（`sf.msg*` 为新增键，旧档缺省回落作者样式，实测验证）。
+
+### 新增（2 个标签）
+
+- `position left= top= width= height= visible= opacity=` —— 消息层位置/尺寸/可见性/
+  透明度运行期改写（KAG3 position 子集，属性式至少一项；全空中文报错）。
+- `current layer=名` —— 当前输出消息层指定：本引擎单消息层，参数记录 + DEBUG 留证。
+
+### 实现
+
+- `position` 写 `sf.msg{Left,Top,Width,Height,Visible,Opacity}`，引擎 `compose_style`
+  每帧对账消费：`box_rect` 改写（clamp 到逻辑分辨率 1280x720，宽高下限 160/60）、
+  `Visible` 控制 fill/border alpha、`Opacity` 直写填充 alpha。
+- 玩家设置对账通道复用：值未变不重算排版，`position` 变更下一帧生效。
+- 测试：174 通过（+4：parse 各属性 / 全空报错 / 执行写 sf.msg* / current 不炸）。
+- 新增 `position-demo.ks`（位置/透明度/可见/恢复/current 留证 + sf.msgLeft 断言），
+  15 剧本无头回归 ALL_PASS；旧存档旧键零改动兼容实测。
+- 152 口径更新：**107 / 19 / 26**（+1 别名）。
+
 ## v0.3.15 — 2026-11-03
 
 **超链接批**（backlog P1-6 邻近，152 表 #12/#13/#14/#32/#33）：KAG3 `link` / `endlink` /

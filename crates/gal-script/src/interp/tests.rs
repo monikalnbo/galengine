@@ -1042,3 +1042,85 @@ fn v0315_button缺graphic报错在解析层() {
     it.activate_button().unwrap(); // 空 graphic 也照常触发（绘制层缺文件跳过）
     assert_eq!(it.vars.get("f.ok"), Some(&crate::vars::Value::Int(1)));
 }
+
+// ===== v0.3.16 position（写 sf.msg* 由引擎 compose_style 消费）+ current 留证 =====
+
+#[test]
+fn v0316_position解析各属性() {
+    let c = crate::command::Command::parse(
+        &crate::lexer::LineKind::Command {
+            name: "position".into(),
+            rest: "left=100 top=500 width=800 height=180 opacity=128".into(),
+        },
+        "t:1",
+    )
+    .unwrap();
+    let crate::command::Command::Position { left, top, width, height, visible, opacity } = c else {
+        panic!("应为 Position");
+    };
+    assert_eq!(
+        (left, top, width, height, visible, opacity),
+        (Some(100), Some(500), Some(800), Some(180), None, Some(128))
+    );
+    // visible=true / false
+    let c = crate::command::Command::parse(
+        &crate::lexer::LineKind::Command { name: "position".into(), rest: "visible=false".into() },
+        "t:2",
+    )
+    .unwrap();
+    let crate::command::Command::Position { visible, .. } = c else { panic!() };
+    assert_eq!(visible, Some(false));
+}
+
+#[test]
+fn v0316_position全空报错() {
+    let e = crate::command::Command::parse(
+        &crate::lexer::LineKind::Command { name: "position".into(), rest: "".into() },
+        "t:1",
+    )
+    .unwrap_err();
+    assert!(e.contains("position 用法"), "{e}");
+}
+
+#[test]
+fn v0316_position执行写sf_msg变量() {
+    let mut it = interp();
+    it.scripts.insert(
+        "p16.ks".into(),
+        crate::lexer::parse_script(
+            "*start\nposition left=100 top=500 width=800 height=180\nn 台词\n",
+        )
+        .unwrap(),
+    );
+    it.start("p16.ks", None).unwrap();
+    assert_eq!(it.vars.get("sf.msgLeft"), Some(&crate::vars::Value::Int(100)));
+    assert_eq!(it.vars.get("sf.msgTop"), Some(&crate::vars::Value::Int(500)));
+    assert_eq!(it.vars.get("sf.msgWidth"), Some(&crate::vars::Value::Int(800)));
+    assert_eq!(it.vars.get("sf.msgHeight"), Some(&crate::vars::Value::Int(180)));
+    // opacity/visible 部分指定不覆盖未给的项
+    let want = crate::command::Command::Position {
+        left: None,
+        top: None,
+        width: None,
+        height: None,
+        visible: Some(true),
+        opacity: Some(64),
+    };
+    it.exec(want, "t").unwrap();
+    assert_eq!(it.vars.get("sf.msgVisible"), Some(&crate::vars::Value::Int(1)));
+    assert_eq!(it.vars.get("sf.msgOpacity"), Some(&crate::vars::Value::Int(64)));
+    assert_eq!(it.vars.get("sf.msgLeft"), Some(&crate::vars::Value::Int(100))); // 未给不动
+}
+
+#[test]
+fn v0316_current解析与执行不炸() {
+    let c = crate::command::Command::parse(
+        &crate::lexer::LineKind::Command { name: "current".into(), rest: "layer=message0".into() },
+        "t:1",
+    )
+    .unwrap();
+    let crate::command::Command::Current { layer } = c else { panic!("应为 Current") };
+    assert_eq!(layer.as_deref(), Some("message0"));
+    let mut it = interp();
+    it.exec(crate::command::Command::Current { layer: Some("message0".into()) }, "t").unwrap();
+}

@@ -161,6 +161,33 @@ pub fn compose_style(
         let w = v.as_i64().clamp(0, gal_config::FX_MAX as i64) as u8;
         style.outline = w;
     }
+    // v0.3.16 position 标签（脚本写 sf.msg*）：消息层位置/尺寸/可见/透明度运行期改写
+    let msg = |k: &str| vars.sf.get(&format!("msg{k}")).map(|v| v.as_i64());
+    let (mut bx, mut by, mut bw, mut bh) = {
+        let b = style.box_rect;
+        (b[0], b[1], b[2], b[3])
+    };
+    if let Some(v) = msg("Left") {
+        bx = v.clamp(0, gal_config::LOGICAL_W as i64) as i32;
+    }
+    if let Some(v) = msg("Top") {
+        by = v.clamp(0, gal_config::LOGICAL_H as i64) as i32;
+    }
+    if let Some(v) = msg("Width") {
+        bw = v.clamp(160, gal_config::LOGICAL_W as i64) as i32;
+    }
+    if let Some(v) = msg("Height") {
+        bh = v.clamp(60, gal_config::LOGICAL_H as i64) as i32;
+    }
+    style.box_rect = [bx, by, bw, bh];
+    if let Some(v) = msg("Visible") {
+        let on = v == 1;
+        style.fill[3] = if on { style.fill[3].max(1) } else { 0 };
+        style.border[3] = if on { style.border[3].max(1) } else { 0 };
+    }
+    if let Some(v) = msg("Opacity") {
+        style.fill[3] = v.clamp(0, 255) as u8;
+    }
     style
 }
 

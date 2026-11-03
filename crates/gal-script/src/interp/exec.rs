@@ -648,6 +648,40 @@ impl Interp {
                 );
                 Ok(false)
             }
+            Command::Position { left, top, width, height, visible, opacity } => {
+                // v0.3.16 KAG3 position：写 sf.msg*（引擎 compose_style 每帧对账生效）
+                let mut put = |k: &str, v: i64| {
+                    self.vars.set(&format!("sf.msg{k}"), Value::Int(v));
+                };
+                if let Some(v) = left {
+                    put("Left", v as i64);
+                }
+                if let Some(v) = top {
+                    put("Top", v as i64);
+                }
+                if let Some(v) = width {
+                    put("Width", v as i64);
+                }
+                if let Some(v) = height {
+                    put("Height", v as i64);
+                }
+                if let Some(v) = visible {
+                    put("Visible", i64::from(v));
+                }
+                if let Some(v) = opacity {
+                    put("Opacity", v as i64);
+                }
+                Ok(false)
+            }
+            Command::Current { layer } => {
+                // v0.3.16 单消息层引擎：current 记录 + DEBUG 留证（多文字层留待后续批次）
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    &format!("[current] 消息层指定（单消息层引擎，记录留证）：layer={layer:?}"),
+                );
+                Ok(false)
+            }
             Command::NoWait => {
                 self.nowait_on = true;
                 Ok(false)

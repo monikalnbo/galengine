@@ -382,6 +382,20 @@ pub enum Command {
         x: Option<u32>,
         y: Option<u32>,
     },
+    /// v0.3.16 `position left= top= width= height= visible= opacity=`：消息层位置/尺寸/可见
+    /// （KAG3 position 子集：写 sf.msg* 由引擎每帧对账 compose_style 生效）
+    Position {
+        left: Option<i32>,
+        top: Option<i32>,
+        width: Option<i32>,
+        height: Option<i32>,
+        visible: Option<bool>,
+        opacity: Option<i32>,
+    },
+    /// v0.3.16 `current`：当前输出消息层指定（本引擎单消息层：参数记录 + DEBUG 留证）
+    Current {
+        layer: Option<String>,
+    },
     /// v0.3.14 `nowait` / `endnowait`：区间打字机瞬时揭示
     NoWait,
     EndNoWait,
