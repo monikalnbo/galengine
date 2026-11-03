@@ -660,3 +660,40 @@ fn v038_wv等待视频播完() {
     it.exec(Command::WaitVideo, "t:1").unwrap();
     assert!(matches!(it.state, RunState::WaitAudio(crate::interp::AudioWait::VideoDone)));
 }
+
+#[test]
+fn v039_layopt与stoptrans执行() {
+    let mut it = interp();
+    it.stage.set_layer(1, Some("char/a".into()), 0).unwrap();
+    // layopt 隐藏：visible() 为假（渲染层据此跳过）
+    it.exec(Command::LayOpt { n: 1, visible: Some(false), opacity: None }, "t:1").unwrap();
+    assert!(!it.stage.layer(1).unwrap().visible());
+    // 不透明度落层
+    it.exec(Command::LayOpt { n: 1, visible: Some(true), opacity: Some(128) }, "t:2").unwrap();
+    assert!(it.stage.layer(1).unwrap().visible());
+    assert_eq!(it.stage.layer(1).unwrap().opacity, 128);
+    // stoptrans：有在途转场 → 丢弃并停在目标态；无转场 → 静默
+    it.stage.set_layer(0, Some("bg/a".into()), 0).unwrap();
+    it.stage.start_trans(0, "bg/b".into(), 5000, crate::stage::TransMethod::Crossfade);
+    it.exec(Command::StopTrans, "t:3").unwrap();
+    assert!(it.stage.trans.is_none());
+    assert_eq!(it.stage.layers[0].cur.as_deref(), Some("bg/b"));
+    it.exec(Command::StopTrans, "t:4").unwrap();
+}
+
+#[test]
+fn v039_move缓动尾参执行() {
+    let mut it = interp();
+    it.exec(Command::MoveEase { n: 5, frames: vec![(500, 100, 0)], ease: "easein".into() }, "t:1")
+        .unwrap();
+    let m = it.stage.moves.first().unwrap();
+    assert_eq!(m.ease, crate::stage::Ease::EaseIn);
+    // 缓动映射：easein 在 k=0.5 时进度 0.25 → x=25
+    assert!((m.offset_at(0.5).0 as f32 - 25.0).abs() < 1.0);
+    // linear 对照：k=0.5 → 50
+    it.stage.stop_move(5);
+    it.exec(Command::Move { n: 5, frames: vec![(500, 100, 0)] }, "t:2").unwrap();
+    let m = it.stage.moves.first().unwrap();
+    assert_eq!(m.ease, crate::stage::Ease::Linear);
+    assert_eq!(m.offset_at(0.5).0, 50);
+}

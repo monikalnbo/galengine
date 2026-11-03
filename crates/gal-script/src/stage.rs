@@ -43,7 +43,7 @@ impl LayerKind {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Layer {
     pub cur: Option<String>,
     pub prev: Option<String>,
@@ -56,6 +56,26 @@ pub struct Layer {
     pub offset: (i32, i32),
     /// 是否Q版立绘（名单见 game.yaml sprites.chibi；在场时背景虚化）
     pub chibi: bool,
+    /// v0.3.9 layopt：是否绘制该层（KAG3 layer visible）
+    pub visible: bool,
+    /// v0.3.9 layopt：绘制不透明度 0-255（KAG3 layer opacity）
+    pub opacity: u8,
+}
+
+impl Default for Layer {
+    fn default() -> Self {
+        Self {
+            cur: None,
+            prev: None,
+            back: None,
+            t: 0.0,
+            dur: 0.0,
+            offset: (0, 0),
+            chibi: false,
+            visible: true, // 缺省绘制（KAG3 层缺省 visible）
+            opacity: 255,
+        }
+    }
 }
 
 impl Layer {
@@ -75,7 +95,7 @@ impl Layer {
     }
 
     pub fn visible(&self) -> bool {
-        self.cur.is_some() || self.prev.is_some()
+        self.visible && (self.cur.is_some() || self.prev.is_some())
     }
 
     pub fn tick(&mut self, dt_ms: f32) {
@@ -221,6 +241,46 @@ pub struct MoveClip {
     /// 总时长 = 末帧时间
     pub dur_ms: u32,
     pub left_ms: u32,
+    /// v0.3.9 缓动方法（linear/easein/easeout/easeinout；缺省 linear）
+    pub ease: Ease,
+}
+
+/// v0.3.9 缓动函数族：段内插值进度再映射（KAG3 DefaultMover 的 ease 口径）
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Ease {
+    #[default]
+    Linear,
+    EaseIn,
+    EaseOut,
+    EaseInOut,
+}
+
+impl Ease {
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "linear" => Self::Linear,
+            "easein" => Self::EaseIn,
+            "easeout" => Self::EaseOut,
+            "easeinout" => Self::EaseInOut,
+            _ => return None,
+        })
+    }
+
+    /// 进度 k(0..1) → 映射后进度
+    pub fn apply(self, k: f32) -> f32 {
+        match self {
+            Self::Linear => k,
+            Self::EaseIn => k * k,
+            Self::EaseOut => 1.0 - (1.0 - k) * (1.0 - k),
+            Self::EaseInOut => {
+                if k < 0.5 {
+                    2.0 * k * k
+                } else {
+                    1.0 - 2.0 * (1.0 - k) * (1.0 - k)
+                }
+            }
+        }
+    }
 }
 
 impl MoveClip {
@@ -247,6 +307,7 @@ impl MoveClip {
         let (t1, x1, y1) = self.frames[i + 1];
         let span = (t1 - t0).max(1) as f32;
         let k = ((t - t0 as f32) / span).clamp(0.0, 1.0);
+        let k = self.ease.apply(k);
         (
             (x0 as f32 + (x1 - x0) as f32 * k).round() as i32,
             (y0 as f32 + (y1 - y0) as f32 * k).round() as i32,
@@ -496,7 +557,17 @@ impl Stage {
 
     /// v0.3.6 开始一段位移动画（KAG3 `move`）：frames 时间升序。
     /// t=0 缺省帧补当前 offset；重复调用覆盖同层在途动画。
-    pub fn start_move(&mut self, n: usize, mut frames: Vec<(u32, i32, i32)>) -> Result<(), String> {
+    pub fn start_move(&mut self, n: usize, frames: Vec<(u32, i32, i32)>) -> Result<(), String> {
+        self.start_move_ease(n, frames, Ease::default())
+    }
+
+    /// v0.3.9 带缓动的位移动画（`move … easein/easeout/easeinout` 尾参）
+    pub fn start_move_ease(
+        &mut self,
+        n: usize,
+        mut frames: Vec<(u32, i32, i32)>,
+        ease: Ease,
+    ) -> Result<(), String> {
         self.ensure_layer(n)?;
         if frames.is_empty() {
             return Err(format!("层 {n}：move 关键帧为空"));
@@ -508,11 +579,34 @@ impl Stage {
         let dur_ms = frames.last().map(|f| f.0).unwrap_or(0);
         self.layers[n].offset = (frames[0].1, frames[0].2);
         self.moves.retain(|m| m.layer != n);
-        self.moves.push(MoveClip { layer: n, frames, dur_ms, left_ms: dur_ms });
+        self.moves.push(MoveClip { layer: n, frames, dur_ms, left_ms: dur_ms, ease });
         Ok(())
     }
 
     /// v0.3.6 在途位移动画的剩余时长（取各层最长；无在途 = None，`wa` 语义）
+    /// v0.3.9 stoptrans：中止在途转场，层停在目标态（cur 已是目标，丢弃 clip 即可）。
+    /// 无在途转场时静默（KAG3 同口径）
+    pub fn stop_trans(&mut self) {
+        self.trans = None;
+    }
+
+    /// v0.3.9 layopt：层可见性 / 不透明度
+    pub fn lay_opt(
+        &mut self,
+        n: usize,
+        visible: Option<bool>,
+        opacity: Option<u8>,
+    ) -> Result<(), String> {
+        self.ensure_layer(n)?;
+        if let Some(v) = visible {
+            self.layers[n].visible = v;
+        }
+        if let Some(o) = opacity {
+            self.layers[n].opacity = o;
+        }
+        Ok(())
+    }
+
     pub fn move_left_ms(&self) -> Option<u32> {
         self.moves.iter().map(|m| m.left_ms).max()
     }

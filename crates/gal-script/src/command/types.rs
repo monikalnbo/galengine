@@ -74,6 +74,26 @@ pub enum Command {
     AnimStop {
         n: Option<u8>,
     },
+    // ===== v0.3.9 条件标签收尾 =====
+    /// layopt 层 [visible=t/f] [opacity=0-255]：层可见性/不透明度（KAG3 属性写法）
+    LayOpt {
+        n: u8,
+        visible: Option<bool>,
+        opacity: Option<u8>,
+    },
+    /// laycount n：立绘层数上限设定（记录口径，本引擎固定 3 槽）
+    LayCount {
+        n: u8,
+    },
+    /// stoptrans：中止在途转场（层停在目标态）
+    StopTrans,
+    /// move 加 ease 参数：缓动方法（linear/easein/easeout/easeinout），v0.3.9
+    /// 复用 Move 的 frames，另带 method
+    MoveEase {
+        n: u8,
+        frames: Vec<(u32, i32, i32)>,
+        ease: String,
+    },
     // ===== v0.3.7 双页原子转场 =====
     /// forelay [层] [ms] [method]：back 页内容一次翻上到 fore 页（层号缺省=0 背景）
     ForeLay {

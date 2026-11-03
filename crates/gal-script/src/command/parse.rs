@@ -211,7 +211,13 @@ impl Command {
             "move" if tokens.len() >= 2 => {
                 let n = layer_num(tokens[0], ctx)?;
                 let mut frames = Vec::new();
+                let mut ease: Option<String> = None;
                 for t in &tokens[1..] {
+                    // v0.3.9 缓动方法名尾参（linear/easein/easeout/easeinout，非帧写法即识别）
+                    if matches!(&**t, "linear" | "easein" | "easeout" | "easeinout") {
+                        ease = Some(t.to_string());
+                        continue;
+                    }
                     // 帧形态 x,y 或 x,y@ms（缺 @ms 延续上一帧时间，首个缺省 0）
                     let (xy, ms) = match t.split_once('@') {
                         Some((xy, ms)) => {
@@ -228,8 +234,32 @@ impl Command {
                     let t_prev = frames.last().map(|f: &(u32, i32, i32)| f.0).unwrap_or(0);
                     frames.push((ms.unwrap_or(t_prev), num(x)?, num(y)?));
                 }
-                Ok(Command::Move { n, frames })
+                match ease {
+                    Some(ease) => Ok(Command::MoveEase { n, frames, ease }),
+                    None => Ok(Command::Move { n, frames }),
+                }
             }
+            // ===== v0.3.9 条件标签收尾 =====
+            "layopt" if !tokens.is_empty() => {
+                let n = layer_num(tokens[0], ctx)?;
+                let mut visible = None;
+                let mut opacity = None;
+                for t in &tokens[1..] {
+                    if let Some(v) = t.strip_prefix("visible=") {
+                        visible = Some(matches!(v, "true" | "t" | "1"));
+                    } else if let Some(o) = t.strip_prefix("opacity=") {
+                        opacity = Some(num::<u8>(o)?);
+                    } else {
+                        return err("layopt 用法：layopt 层 [visible=t/f] [opacity=0-255]");
+                    }
+                }
+                Ok(Command::LayOpt { n, visible, opacity })
+            }
+            "laycount" => match tokens.as_slice() {
+                [n] => Ok(Command::LayCount { n: num(n)? }),
+                _ => err("laycount 用法：laycount 层数"),
+            },
+            "stoptrans" if tokens.is_empty() => Ok(Command::StopTrans),
             // move 首参是层号：`move 层 x,y@ms …`
             "wa" if tokens.is_empty() => Ok(Command::WaitMove),
             "animstop" => match tokens.as_slice() {

@@ -284,6 +284,28 @@ impl Interp {
                 self.stage.start_move(n as usize, frames)?;
                 Ok(false)
             }
+            Command::MoveEase { n, frames, ease } => {
+                let e =
+                    crate::stage::Ease::parse(&ease).ok_or(format!("move 未知缓动方法：{ease}"))?;
+                self.stage.start_move_ease(n as usize, frames, e)?;
+                Ok(false)
+            }
+            Command::LayOpt { n, visible, opacity } => {
+                self.stage.lay_opt(n as usize, visible, opacity)?;
+                Ok(false)
+            }
+            Command::LayCount { n } => {
+                gal_audio::log::log(
+                    gal_audio::log::Level::Debug,
+                    "script",
+                    &format!("laycount：立绘层数上限记录 {n}（本引擎固定 3 槽，记录不生效）"),
+                );
+                Ok(false)
+            }
+            Command::StopTrans => {
+                self.stage.stop_trans();
+                Ok(false)
+            }
             Command::WaitMove => match self.stage.move_left_ms() {
                 Some(left) => {
                     self.state = RunState::WaitTimer { left_ms: left as f32 };

@@ -19,10 +19,10 @@ fn draw_layer_offset(
     add_x: i32,
     add_y: i32,
 ) -> Result<(), String> {
-    let p = l.alpha();
+    let p = l.alpha() * l.opacity as f32 / 255.0; // v0.3.9 layopt opacity 叠乘
     let (dx, dy) = (l.offset.0 + add_x, l.offset.1 + add_y);
     if let Some(prev) = &l.prev {
-        bank.draw_full_alpha_offset(canvas, prev, 1.0 - p, dx, dy)?;
+        bank.draw_full_alpha_offset(canvas, prev, (1.0 - p).min(1.0), dx, dy)?;
     }
     if let Some(cur) = &l.cur {
         bank.draw_full_alpha_offset(canvas, cur, p, dx, dy)?;

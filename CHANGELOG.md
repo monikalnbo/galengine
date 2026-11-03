@@ -2,6 +2,25 @@
 
 遵循 [语义化版本](https://semver.org/lang/zh-CN/)。旧 `game.yaml`、旧存档、旧 `savedata/global.json` 均可直接使用。
 
+## v0.3.9 — 2026-11-03
+
+**条件标签收尾批**（backlog P1-3 收尾）：KAG3 `layopt` / `laycount` / `stoptrans` + `move` 缓动函数族。
+存档格式零改动。旧剧本/旧配置/旧存档零改动兼容（实测验证）。
+
+### 新增
+
+- `layopt 层 [visible=t/f] [opacity=0-255]`：层可见性/不透明度（KAG3 属性写法）；
+  opacity 在绘制时与渐变 alpha 叠乘，visible=false 直接跳过绘制。
+- `laycount 层数`：立绘层数上限记录（本引擎固定 3 槽，DEBUG 留证）。
+- `stoptrans`：中止在途转场，层停在目标态（KAG3 口径）；无在途转场时静默。
+- `move` 尾参缓动：`move 层 x,y@ms … [linear|easein|easeout|easeinout]`；
+  缺省 linear（v0.3.6 剧本零改动）。Ease：easein=k²、easeout=1-(1-k)²、easeinout 分段平方。
+
+### 兼容性
+
+- `Layer` 新增 `visible`（缺省 true）/ `opacity`（缺省 255）字段，旧档读出即缺省值，行为不变。
+- `move` 无尾参解析为旧 `Move`（linear），`anim-demo.ks` 等旧剧本零改动通过。
+
 ## v0.3.8 — 2026-11-03
 
 **视频子系统批**（backlog P2-4）：KAG3 视频标签组 8 项 + `wv` 变真等待。

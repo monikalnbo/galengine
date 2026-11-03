@@ -376,3 +376,41 @@ fn v033转场偏移_slide_scroll() {
     let (old, new) = clip(TransMethod::Crossfade).slide_offsets(0.5);
     assert_eq!((old, new), ((0, 0), (0, 0)));
 }
+
+#[test]
+fn v039条件标签收尾_解析() {
+    // layopt：KAG3 属性写法
+    assert!(matches!(
+        cmd("layopt", "1 visible=false").unwrap(),
+        Command::LayOpt { n: 1, visible: Some(false), opacity: None }
+    ));
+    assert!(matches!(
+        cmd("layopt", "2 opacity=128").unwrap(),
+        Command::LayOpt { n: 2, visible: None, opacity: Some(128) }
+    ));
+    assert!(matches!(
+        cmd("layopt", "1 visible=true opacity=0").unwrap(),
+        Command::LayOpt { visible: Some(true), opacity: Some(0), .. }
+    ));
+    assert!(cmd("layopt", "").is_err());
+    assert!(cmd("layopt", "1 bogus=x").is_err());
+    assert!(cmd("layopt", "1 opacity=999").is_err());
+    // laycount / stoptrans
+    assert!(matches!(cmd("laycount", "5").unwrap(), Command::LayCount { n: 5 }));
+    assert!(cmd("laycount", "").is_err());
+    assert!(matches!(cmd("stoptrans", "").unwrap(), Command::StopTrans));
+    assert!(cmd("stoptrans", "1").is_err());
+    // move 缓动尾参：识别方法名 → MoveEase，否则原 Move
+    assert!(matches!(
+        cmd("move", "5 100,0@500 easeinout").unwrap(),
+        Command::MoveEase { n: 5, ease, .. } if ease == "easeinout"
+    ));
+    assert!(matches!(
+        cmd("move", "5 0,0 200,40@600 linear").unwrap(),
+        Command::MoveEase { ease, .. } if ease == "linear"
+    ));
+    // 方法名不是帧写法，不会误当 x,y 解析；无尾参保持旧 Move（v0.3.6 剧本零改动）
+    assert!(matches!(cmd("move", "5 100,0@500").unwrap(), Command::Move { n: 5, .. }));
+    // 层号同名帧写法不受影响（move 1 0,0 无尾参）
+    assert!(matches!(cmd("move", "1 0,0").unwrap(), Command::Move { n: 1, .. }));
+}
