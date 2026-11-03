@@ -2,6 +2,25 @@
 
 遵循 [语义化版本](https://semver.org/lang/zh-CN/)。旧 `game.yaml`、旧存档、旧 `savedata/global.json` 均可直接使用。
 
+## v0.3.8 — 2026-11-03
+
+**视频子系统批**（backlog P2-4）：KAG3 视频标签组 8 项 + `wv` 变真等待。
+选型：ffmpeg-sidecar（CLI 子进程 rawvideo 管道，MIT，零 FFI 静态包——对比评估见 reports/galengine-video-eval-2026-11-03/）。
+
+### 新增
+
+- **feature `video`（默认关）**：`cargo build --features video` 开启；关闭时全部视频标签 WARN/DEBUG 放行不崩（三路日志方针）。
+- 8 个标签：`video`（参数记录）/ `playvideo 名称 [ms] [skip]` / `stopvideo` / `openvideo 名称` / `pausevideo` / `resumevideo` / `preparevideo 名称` / `rewindvideo`。
+- `wv`：feature 开启时轮询播放器在播态（真等待）；关闭时立即放行（v0.3.3 降级口径不变）。
+- 实现：ffmpeg 子进程 → rgb24 管道 → SDL 纹理逐帧上传，等比铺满窗口；找不到 ffmpeg 或子进程失败 → WARN 降级为未在播，演出不中断。
+- 片源探测：`data/video/`、`data/movie/` 目录，mp4/webm/mkv/avi 扩展名（`gal-config::paths` `video` kind）。
+- 已知口径：resumevideo/rewindvideo 以重播实现（无播放头记忆）；音频轨暂不混音（KAG3 惯例配 playbgm）；视频层盖在演出层之上。
+
+### 兼容性
+
+- 默认构建（不开 feature）行为与 v0.3.7 完全一致；存档格式零改动。
+- 旧剧本/旧配置/旧存档零改动兼容（v0.3.2 时代数据目录实测验证，savedata 字节级不变）。
+
 ## v0.3.7 — 2026-11-03
 
 **双页原子转场批**：KAG3 `forelay` / 无前缀 `trans`（backlog P1-2 后半，消费 v0.3.6 back 页）。
